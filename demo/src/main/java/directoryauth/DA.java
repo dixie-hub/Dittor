@@ -1,6 +1,7 @@
 package directoryauth;
 
 import java.io.ByteArrayInputStream;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,16 +26,19 @@ Responsaveis por:
 
 public class DA {
 
-        Store certs;
-        List<X509Certificate> certList;
+        private static Store certs;
+        private List<X509Certificate> certList;
 
         public DA() {
                 certList = new ArrayList<X509Certificate>();
-                certs = new JcaCertStore(certList);
+                try {
+                        certs = new JcaCertStore(certList);
+                } catch (CertificateEncodingException e) {
+                        System.out.println("Certificates store failed to create. Cause: " + e.getMessage());
+                }
         }
 
-        public static boolean verifSignedData(byte[] signedData)
-                        throws Exception {
+        public static boolean verifSignedData(byte[] signedData) throws Exception {
 
                 X509Certificate signCert = null;
                 ByteArrayInputStream inputStream = new ByteArrayInputStream(signedData);
@@ -47,9 +51,7 @@ public class DA {
                 Collection<X509CertificateHolder> certCollection = certs.getMatches(signer.getSID());
                 X509CertificateHolder certHolder = certCollection.iterator().next();
 
-                return signer
-                                .verify(new JcaSimpleSignerInfoVerifierBuilder()
-                                                .build(certHolder));
+                return signer.verify(new JcaSimpleSignerInfoVerifierBuilder().build(certHolder));
         }
 
 }

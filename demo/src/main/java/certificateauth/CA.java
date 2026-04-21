@@ -56,7 +56,7 @@ import org.bouncycastle.util.Store;
 public class CA {
 
     private List<UUID> certifiedUsers;
-    private PrivateKey key;
+    private static PrivateKey key;
 
     public CA() {
         certifiedUsers = new ArrayList<>();
@@ -89,15 +89,15 @@ public class CA {
         key = (PrivateKey) keystore.getKey("baeldung", keyPassword);
     }
 
-    public static byte[] decryptData(byte[] encryptedData, PrivateKey decryptionKey) throws CMSException {
+    public static byte[] decryptData(byte[] encryptedData) throws CMSException {
 
         byte[] decryptedData = null;
-        if (null != encryptedData && null != decryptionKey) {
+        if (null != encryptedData) {
             CMSEnvelopedData envelopedData = new CMSEnvelopedData(encryptedData);
 
             Collection<RecipientInformation> recipients = envelopedData.getRecipientInfos().getRecipients();
             KeyTransRecipientInformation recipientInfo = (KeyTransRecipientInformation) recipients.iterator().next();
-            JceKeyTransRecipient recipient = new JceKeyTransEnvelopedRecipient(decryptionKey);
+            JceKeyTransRecipient recipient = new JceKeyTransEnvelopedRecipient(key);
 
             return recipientInfo.getContent(recipient);
         }
