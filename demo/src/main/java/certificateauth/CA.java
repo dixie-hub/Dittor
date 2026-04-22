@@ -99,8 +99,9 @@ public class CA {
             KeyTransRecipientInformation recipientInfo = (KeyTransRecipientInformation) recipients.iterator().next();
             JceKeyTransRecipient recipient = new JceKeyTransEnvelopedRecipient(key);
 
-            return recipientInfo.getContent(recipient);
+            decryptedData = recipientInfo.getContent(recipient);
         }
+        System.out.println("Mensagem desencriptada: " + new String(decryptedData));
         return decryptedData;
     }
 

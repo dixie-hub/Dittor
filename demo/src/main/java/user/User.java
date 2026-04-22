@@ -3,9 +3,11 @@ package user;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.Security;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.UUID;
 
 import org.bouncycastle.cms.CMSAlgorithm;
@@ -16,6 +18,7 @@ import org.bouncycastle.cms.CMSProcessableByteArray;
 import org.bouncycastle.cms.CMSTypedData;
 import org.bouncycastle.cms.jcajce.JceCMSContentEncryptorBuilder;
 import org.bouncycastle.cms.jcajce.JceKeyTransRecipientInfoGenerator;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.OutputEncryptor;
 
 import certificateauth.CA;
@@ -25,7 +28,7 @@ public class User {
     public String userID;
 
     public User() {
-        userID = "hello"; // TODO: mudar valores se for necessario
+        userID = "user123"; //exemplo
     }
 
     public byte[] encryptData(X509Certificate encryptionCertificate) throws CertificateEncodingException, CMSException, IOException {
@@ -49,15 +52,15 @@ public class User {
         try {
             InputStream certInput = getClass().getClassLoader().getResourceAsStream("certs/Baeldung.cer");
 
-            System.out.println("Chegou aqui");
-
             CertificateFactory certFactory = CertificateFactory.getInstance("X.509", "BC");
             X509Certificate certificate = (X509Certificate) certFactory.generateCertificate(certInput);
 
+            System.out.println("Original: " + new String(userID.getBytes()));
             byte[] attributeEncripted = encryptData(certificate);
-            System.out.println("ok tudo bem");
+            System.out.println("ID do user encriptado: " + Arrays.toString(attributeEncripted));
+
             byte[] result = CA.decryptData(attributeEncripted);
-            System.out.println("morreu");
+
             return result;
         } catch (Exception e) {
             System.out.println("Failed to read certificate. Cause: " + e.getMessage());

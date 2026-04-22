@@ -18,13 +18,12 @@ public class Dittor {
 
         System.out.println("Successfully created all entities!");
 
-        System.out.println("Sending user's id to CA...");
+        System.out.println("Sending user's attribute to the CA...");
         byte[] result = user.sendAttribute();
         if (result == null) {
             System.out.println("Failed to send user's attribute to the CA");
             return;
         }
-        System.out.println("Result after decrypting: " + result.toString());
     }
 
 }
