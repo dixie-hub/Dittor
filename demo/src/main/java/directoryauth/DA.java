@@ -1,7 +1,9 @@
 package directoryauth;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -11,10 +13,12 @@ import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.cms.ContentInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaCertStore;
+import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
+import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.util.CollectionStore;
 import org.bouncycastle.util.Store;
 
@@ -38,7 +42,7 @@ public class DA {
                 }
         }
 
-        public static boolean verifSignedData(byte[] signedData) throws Exception {
+        public static boolean verifSignedData(byte[] signedData) throws CMSException, IOException, OperatorCreationException, CertificateException  {
 
                 X509Certificate signCert = null;
                 ByteArrayInputStream inputStream = new ByteArrayInputStream(signedData);

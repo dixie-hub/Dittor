@@ -1,11 +1,16 @@
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Base64;
 
 import org.bouncycastle.cms.CMSException;
+import org.bouncycastle.operator.OperatorCreationException;
 
 import certificateauth.CA;
 import directoryauth.DA;
@@ -24,12 +29,12 @@ public class Dittor {
             System.out.println("Sending user's attribute to the CA...");
             byte[] userMessage = user.sendAttribute();
             byte[] decryptedData = ca.decryptData(userMessage);
-
+            System.out.println("Result: " + new String(decryptedData, StandardCharsets.UTF_8));
             if (decryptedData == null) {
                 System.out.println("Failed to send user's attribute to the CA");
                 return;
             }
-        } catch (CMSException e) {
+        } catch (CMSException | OperatorCreationException | CertificateException | IOException e) {
             System.out.println("Something went wrong: " + e.getMessage());
         }
     }
