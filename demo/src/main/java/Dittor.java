@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 
+import org.bouncycastle.cms.CMSException;
+
 import certificateauth.CA;
 import directoryauth.DA;
 import user.User;
@@ -18,11 +20,17 @@ public class Dittor {
 
         System.out.println("Successfully created all entities!");
 
-        System.out.println("Sending user's attribute to the CA...");
-        byte[] result = user.sendAttribute();
-        if (result == null) {
-            System.out.println("Failed to send user's attribute to the CA");
-            return;
+        try {
+            System.out.println("Sending user's attribute to the CA...");
+            byte[] userMessage = user.sendAttribute();
+            byte[] decryptedData = ca.decryptData(userMessage);
+
+            if (decryptedData == null) {
+                System.out.println("Failed to send user's attribute to the CA");
+                return;
+            }
+        } catch (CMSException e) {
+            System.out.println("Something went wrong: " + e.getMessage());
         }
     }
 

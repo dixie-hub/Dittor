@@ -73,7 +73,7 @@ public class CA {
         Security.addProvider(new BouncyCastleProvider());
         CertificateFactory certFactory = CertificateFactory.getInstance("X.509", "BC");
 
-        InputStream certInput = getClass().getClassLoader().getResourceAsStream("certs/Baeldung.cer");
+        InputStream certInput = getClass().getClassLoader().getResourceAsStream("certs/ca.cer");
         if (certInput == null) {
             throw new RuntimeException("O certificado não foi encontrado na pasta dos resources");
         }
@@ -84,12 +84,12 @@ public class CA {
         char[] keyPassword = "password".toCharArray();
 
         KeyStore keystore = KeyStore.getInstance("PKCS12");
-        certInput = getClass().getClassLoader().getResourceAsStream("certs/Baeldung.p12");
+        certInput = getClass().getClassLoader().getResourceAsStream("certs/ca.p12");
         keystore.load(certInput, keystorePassword);
-        key = (PrivateKey) keystore.getKey("baeldung", keyPassword);
+        key = (PrivateKey) keystore.getKey("ca", keyPassword);
     }
 
-    public static byte[] decryptData(byte[] encryptedData) throws CMSException {
+    public byte[] decryptData(byte[] encryptedData) throws CMSException {
 
         byte[] decryptedData = null;
         if (null != encryptedData) {
@@ -105,7 +105,7 @@ public class CA {
         return decryptedData;
     }
 
-    public static byte[] signData(byte[] data, X509Certificate signingCertificate, PrivateKey signingKey)
+    private static byte[] signData(byte[] data, X509Certificate signingCertificate, PrivateKey signingKey)
             throws Exception {
 
         byte[] signedMessage = null;
