@@ -27,9 +27,9 @@ public class Dittor {
 
         try {
             System.out.println("Sending user's attribute to the CA...");
-            byte[] userMessage = user.sendAttribute();
-            byte[] decryptedData = ca.decryptData(userMessage);
-            System.out.println("Result: " + new String(decryptedData, StandardCharsets.UTF_8));
+            byte[] userRequest = user.sendAttribute();
+            byte[] decryptedData = ca.decryptData(userRequest);
+            System.out.println("Result: " + Base64.getDecoder().decode(decryptedData));
             if (decryptedData == null) {
                 System.out.println("Failed to send user's attribute to the CA");
                 return;

@@ -21,6 +21,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -32,6 +33,9 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPrivateCrtKey;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -75,7 +79,8 @@ public class CA {
     public static X509Certificate userCertificate;
     public static X509Certificate caCertificate;
 
-    private static PrivateKey key;
+    private RSAPrivateCrtKey privateKey;
+    private RSAPublicKey publicKey;
 
     public CA() {
         certifiedUsers = new ArrayList<>();
@@ -100,6 +105,8 @@ public class CA {
         userCertificate = (X509Certificate) certFactory.generateCertificate(userCertInput);
         caCertificate = (X509Certificate) certFactory.generateCertificate(caCertInput);
 
+        publicKey = (RSAPublicKey) caCertificate.getPublicKey();
+
         certList.add(userCertificate); // colocar todos os certificados available para a CA numa lista
 
         char[] keystorePassword = "password".toCharArray(); // so para motivos de emulacao
@@ -108,7 +115,7 @@ public class CA {
         KeyStore keystore = KeyStore.getInstance("PKCS12");
         InputStream userKeyInput = getClass().getClassLoader().getResourceAsStream("certs/ca.p12");
         keystore.load(userKeyInput, keystorePassword);
-        key = (PrivateKey) keystore.getKey("ca", keyPassword);
+        privateKey = (RSAPrivateCrtKey) keystore.getKey("ca", keyPassword);
     }
 
     public byte[] decryptData(byte[] encryptedData)
@@ -120,7 +127,7 @@ public class CA {
 
             Collection<RecipientInformation> recipients = envelopedData.getRecipientInfos().getRecipients();
             KeyTransRecipientInformation recipientInfo = (KeyTransRecipientInformation) recipients.iterator().next();
-            JceKeyTransRecipient recipient = new JceKeyTransEnvelopedRecipient(key);
+            JceKeyTransRecipient recipient = new JceKeyTransEnvelopedRecipient(privateKey);
 
             decryptedData = recipientInfo.getContent(recipient);
 
@@ -133,29 +140,11 @@ public class CA {
                 System.out.println("A mensagem foi intercetada ou a assinatura do utilizador não é válida.");
                 return null;
             }
-
-            String[] attributes = new String(attributeBytes, StandardCharsets.UTF_8).split("\\|\\|");
-
-            String userID = attributes[0]; //TODO: transformar isto em Zero-Knowledge, transformando isto num hash
-            Timestamp timeSent = Timestamp.valueOf(attributes[1]);
-            Timestamp currentTime = new Timestamp(System.currentTimeMillis());
-
-            if (timeSent.after(currentTime)) {
-                System.out.println("Mensagem inválida.");
+            if (!verifAttributes(attributeBytes)) {
+                System.out.println("A mensagem não é válida.");
                 return null;
             }
-            if (currentTime.getTime() - timeSent.getTime() > 30000) {
-                System.out.println("Tentativa de replay de mensagem antiga.");
-                return null;
-            }
-
-            if (certifiedUsers.contains(userID)) {
-                System.out.println("Utilizador já tem um pseudónimo criado.");
-                return null;
-            }
-
-            certifiedUsers.add(userID);
-                
+            return message.toString().getBytes();
         }
         return decryptedData;
     }
@@ -183,7 +172,11 @@ public class CA {
     }
 
     public static boolean verifSignedData(byte[] signedData, byte[] attributeBytes)
-            throws CMSException, IOException, OperatorCreationException, CertificateException { //TODO: verificar se a assinatura do user e valida, garantindo que o seu certificado e valido
+            throws CMSException, IOException, OperatorCreationException, CertificateException { // TODO: verificar se a
+                                                                                                // assinatura do user e
+                                                                                                // valida, garantindo
+                                                                                                // que o seu certificado
+                                                                                                // e valido
 
         CMSSignedData cmsSignedData = new CMSSignedData(signedData);
 
@@ -194,11 +187,11 @@ public class CA {
         }
 
         /*
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(signedData);
-        ASN1InputStream asnInputStream = new ASN1InputStream(inputStream);
-        CMSSignedData cmsSignedData = new CMSSignedData(
-                ContentInfo.getInstance(asnInputStream.readObject()));
-        */
+         * ByteArrayInputStream inputStream = new ByteArrayInputStream(signedData);
+         * ASN1InputStream asnInputStream = new ASN1InputStream(inputStream);
+         * CMSSignedData cmsSignedData = new CMSSignedData(
+         * ContentInfo.getInstance(asnInputStream.readObject()));
+         */
 
         SignerInformationStore signers = cmsSignedData.getSignerInfos();
         SignerInformation signer = signers.getSigners().iterator().next();
@@ -206,10 +199,78 @@ public class CA {
         X509CertificateHolder certHolder = certCollection.iterator().next();
 
         X509Certificate cert = new JcaX509CertificateConverter().setProvider("BC").getCertificate(certHolder);
-        if (!cert.equals(userCertificate)) //certificado nao e o do user, mas nao verifica se e valido
+        if (!cert.equals(userCertificate)) // certificado nao e o do user, mas nao verifica se e valido
             return false;
 
         return signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider("BC").build(certHolder));
     }
 
+    private boolean verifAttributes(byte[] attributeBytes) {
+        String[] attributes = new String(attributeBytes, StandardCharsets.UTF_8).split("\\|\\|");
+
+        String pseudonym = attributes[0]; // TODO: transformar isto em Zero-Knowledge, transformando isto num hash
+        Timestamp timeSent = Timestamp.valueOf(attributes[1]);
+        Timestamp currentTime = new Timestamp(System.currentTimeMillis());
+
+        if (timeSent.after(currentTime)) {
+            System.out.println("Mensagem inválida.");
+            return false;
+        }
+        if (currentTime.getTime() - timeSent.getTime() > 30000) {
+            System.out.println("Tentativa de replay de mensagem antiga.");
+            return false;
+        }
+        if (certifiedUsers.contains(pseudonym)) {
+            System.out.println("Utilizador já tem um pseudónimo criado.");
+            return false;
+        }
+
+        certifiedUsers.add(pseudonym);
+        return true;
+    }
+
+/**
+     * Calculate mu' using the Chinese Remainder Theorem for optimization
+     * Thanks to the isomorphism property f(x+y)=f(x)+f(y) we can split the mu^d modN in two:
+     * one mode p , one mode q, and then we can combine the results to calculate muprime
+     * @param mu
+     * @return mu'
+     */
+    private BigInteger calculateMuPrimeWithChineseRemainderTheorem(BigInteger mu)
+    {
+        try
+        {
+            BigInteger N = publicKey.getModulus(); //get modulus N
+
+            BigInteger P = privateKey.getPrimeP(); //get the prime number p used to produce the key pair
+
+            BigInteger Q = privateKey.getPrimeQ(); //get the prime number q used to produce the key pair
+
+            //We split the mu^d modN in two , one mode p , one mode q
+
+            BigInteger PinverseModQ = P.modInverse(Q); //calculate p inverse modulo q
+
+            BigInteger QinverseModP = Q.modInverse(P); //calculate q inverse modulo p
+
+            BigInteger d = privateKey.getPrivateExponent(); //get private exponent d
+
+            //We split the message mu in to messages m1, m2 one mod p, one mod q
+
+            BigInteger m1 = mu.modPow(d, N).mod(P); //calculate m1=(mu^d modN)modP
+
+            BigInteger m2 = mu.modPow(d, N).mod(Q); //calculate m2=(mu^d modN)modQ
+
+            //We combine the calculated m1 and m2 in order to calculate muprime
+            //We calculate muprime: (m1*Q*QinverseModP + m2*P*PinverseModQ) mod N where N =P*Q
+            
+            BigInteger muprime = ((m1.multiply(Q).multiply(QinverseModP)).add(m2.multiply(P).multiply(PinverseModQ))).mod(N);
+
+            return muprime;
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        return null;
+    }
 }
