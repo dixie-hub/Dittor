@@ -108,12 +108,13 @@ public class User {
             byte[] nonce = new byte[32];
             new SecureRandom().nextBytes(nonce);
 
-            byte[] authPayload = ByteBuffer.allocate(userCertificate.getEncoded().length + nonce.length)
-                    .put(userCertificate.getEncoded()).put(nonce).array();
+            String authPayloadString = Base64.getEncoder().encodeToString(userCertificate.getEncoded()) + "||"
+                    + Base64.getEncoder().encodeToString(nonce);
+            byte[] authPayload = authPayloadString.getBytes(StandardCharsets.UTF_8);
             byte[] auth = signData(authPayload);
 
             String message = Base64.getEncoder().encodeToString(mu.toByteArray()) + "||"
-                    + Base64.getEncoder().encodeToString(auth);
+                    + Base64.getEncoder().encodeToString(authPayload) + "||" + Base64.getEncoder().encodeToString(auth);
 
             byte[] encryptedMu = encryptData(caCertificate, message.getBytes());
 

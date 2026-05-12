@@ -4,6 +4,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.SignatureException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -28,13 +32,14 @@ public class Dittor {
         try {
             System.out.println("Sending user's attribute to the CA...");
             byte[] userRequest = user.sendAttribute();
-            byte[] decryptedData = ca.decryptData(userRequest);
+            byte[] decryptedData = ca.receiveRequest(userRequest);
             System.out.println("Result: " + Base64.getDecoder().decode(decryptedData));
             if (decryptedData == null) {
                 System.out.println("Failed to send user's attribute to the CA");
                 return;
             }
-        } catch (CMSException | OperatorCreationException | CertificateException | IOException e) {
+        } catch (CMSException | OperatorCreationException | CertificateException | IOException
+                | NoSuchAlgorithmException | InvalidKeyException | NoSuchProviderException | SignatureException e) {
             System.out.println("Something went wrong: " + e.getMessage());
         }
     }
