@@ -73,7 +73,7 @@ public class CA {
     private RSAPublicKey publicKey;
 
     public CA() {
-        nonceTimestamps = new HashMap<>();
+        nonceTimestamps = new HashMap<>(); //bloom filter?
         certList = new ArrayList<X509Certificate>();
         certifiedUsers = new ArrayList<>();
 

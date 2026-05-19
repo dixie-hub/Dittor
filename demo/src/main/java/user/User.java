@@ -90,8 +90,7 @@ public class User {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
-            String context = "TorRelay:1"; // contexto muda para cada relay, de forma a que haja unlinkability entre os
-                                           // nos q o user corre
+            String context = "TorRelay"; 
 
             byte[] userInput = ByteBuffer.allocate(userSecret.length + context.getBytes().length).put(userSecret)
                     .put(context.getBytes(StandardCharsets.UTF_8)).array();
