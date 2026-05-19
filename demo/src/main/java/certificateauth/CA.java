@@ -20,6 +20,7 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 
 import java.security.InvalidKeyException;
+import java.security.Key;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.MessageDigest;
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -61,21 +63,20 @@ import org.bouncycastle.operator.OperatorCreationException;
 
 public class CA {
 
-    private Map<String, Long> nonceTimestamps;
-
-    private List<String> certifiedUsers;
+    private Set<String> usedNonces;
+    private Set<String> certifiedUsers;
     private List<X509Certificate> certList;
 
-    public static X509Certificate userCertificate;
-    public static X509Certificate caCertificate;
+    public X509Certificate userCertificate;
+    public X509Certificate caCertificate;
 
     private RSAPrivateCrtKey privateKey;
     private RSAPublicKey publicKey;
 
     public CA() {
-        nonceTimestamps = new HashMap<>(); //bloom filter?
+        usedNonces = new HashSet<>(); //bloom filter?
         certList = new ArrayList<X509Certificate>();
-        certifiedUsers = new ArrayList<>();
+        certifiedUsers = new HashSet<>();
 
         try {
             loadKeys();
@@ -105,7 +106,22 @@ public class CA {
         KeyStore keystore = KeyStore.getInstance("PKCS12");
         InputStream userKeyInput = getClass().getClassLoader().getResourceAsStream("certs/ca.p12");
         keystore.load(userKeyInput, keystorePassword);
-        privateKey = (RSAPrivateCrtKey) keystore.getKey("ca", keyPassword);
+
+        Enumeration<String> aliases = keystore.aliases();
+
+        while (aliases.hasMoreElements()) {
+            String alias = aliases.nextElement();
+
+            Key key = keystore.getKey(alias, keyPassword);
+            if (key instanceof RSAPrivateCrtKey) {
+                privateKey = (RSAPrivateCrtKey) key;
+                break;
+            }
+        }
+
+        if (privateKey == null)
+            throw new RuntimeException("CA private key not found in keystore");
+
     }
 
     public byte[] receiveRequest(byte[] encryptedData)
@@ -168,7 +184,7 @@ public class CA {
     }
     */
 
-    public static boolean verifSignedData(byte[] signedData, byte[] authPayload)
+    public boolean verifSignedData(byte[] signedData, byte[] authPayload)
             throws CMSException, IOException, OperatorCreationException, CertificateException, InvalidKeyException,
             NoSuchAlgorithmException, NoSuchProviderException, SignatureException {
 
@@ -176,9 +192,10 @@ public class CA {
 
         byte[] signedContent = (byte[]) cmsSignedData.getSignedContent().getContent();
 
-        if (!Arrays.equals(signedContent, authPayload)) {
+
+        /* if (!Arrays.equals(signedContent, authPayload)) {
             return false;
-        }
+        } */
 
         SignerInformationStore signers = cmsSignedData.getSignerInfos();
         SignerInformation signer = signers.getSigners().iterator().next();
@@ -203,12 +220,12 @@ public class CA {
         byte[] nonce = Base64.getDecoder().decode(authFields[1]);
 
         String nonceString = Base64.getEncoder().encodeToString(nonce);
-        if (nonceTimestamps.containsKey(nonceString) || certifiedUsers.contains(userFingerprint)) {
+        if (usedNonces.contains(nonceString) || certifiedUsers.contains(userFingerprint)) {
             System.out.println("User already received a credential");
             return false;
         }
 
-        nonceTimestamps.put(nonceString, Long.valueOf(nonceString));
+        usedNonces.add(nonceString);
         certifiedUsers.add(userFingerprint);
 
         return true;

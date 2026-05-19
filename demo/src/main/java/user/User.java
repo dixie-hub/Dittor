@@ -19,10 +19,12 @@ import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.UUID;
 
@@ -90,7 +92,7 @@ public class User {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
-            String context = "TorRelay"; 
+            String context = "TorRelay";
 
             byte[] userInput = ByteBuffer.allocate(userSecret.length + context.getBytes().length).put(userSecret)
                     .put(context.getBytes(StandardCharsets.UTF_8)).array();
@@ -129,11 +131,11 @@ public class User {
         boolean signatureValid = verifySignature(caSignature);
 
         if (!signatureValid) {
-            System.out.println("A assinatura da CA foi tampered");
+            System.out.println("CA´s signature was tampered");
             return null;
         }
 
-        System.out.println("A assinatura da CA foi concluída com êxito!");
+        System.out.println("CA succesfully signed the user's attribute!");
         return caSignature.getBytes();
     }
 
@@ -176,7 +178,11 @@ public class User {
         KeyStore keystore = KeyStore.getInstance("PKCS12");
         InputStream userKeyInput = getClass().getClassLoader().getResourceAsStream("certs/user.p12");
         keystore.load(userKeyInput, keystorePassword);
-        key = (PrivateKey) keystore.getKey("user", keyPassword);
+
+        Enumeration<String> aliases = keystore.aliases();
+        String alias = aliases.nextElement();
+
+        key = (PrivateKey) keystore.getKey(alias, keyPassword);
     }
 
     private BigInteger calculateMu(byte[] message) {
@@ -246,11 +252,6 @@ public class User {
                                                                         // read all the symbols
 
             String signature = (new String(bytes)); // make a string based on the byte array representing the signature
-
-            System.out.println("Signature produced with Blind RSA procedure for message (hashed with SHA1): "
-                    + new String(m.toByteArray()) + " is: ");
-
-            System.out.println(signature);
 
             return signature;
         } catch (Exception e) {

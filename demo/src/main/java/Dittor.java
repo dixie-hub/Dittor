@@ -3,6 +3,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -33,7 +34,11 @@ public class Dittor {
             System.out.println("Sending user's attribute to the CA...");
             byte[] userRequest = user.sendAttribute();
             byte[] decryptedData = ca.receiveRequest(userRequest);
-            System.out.println("Result: " + Base64.getDecoder().decode(decryptedData));
+
+            BigInteger muPrime = new BigInteger(decryptedData);
+            byte[] signature = user.receiveSignedAttribute(muPrime);
+
+            System.out.println("Result: " + Base64.getEncoder().encodeToString(signature));
             if (decryptedData == null) {
                 System.out.println("Failed to send user's attribute to the CA");
                 return;
@@ -41,6 +46,7 @@ public class Dittor {
         } catch (CMSException | OperatorCreationException | CertificateException | IOException
                 | NoSuchAlgorithmException | InvalidKeyException | NoSuchProviderException | SignatureException e) {
             System.out.println("Something went wrong: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
