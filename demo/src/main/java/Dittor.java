@@ -1,7 +1,5 @@
-import java.io.IOException;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.SignatureException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
@@ -15,50 +13,93 @@ import user.User;
 public class Dittor {
 
     public static void main(String[] args) {
+        // threshold t and CAs pool size n
+        int t = 2;
+        int n = 3;
+
         System.out.println("Initializing Bilinear Group...");
-        BilinearGroup pairing = new BarretoNaehrigBilinearGroup(100);
-        Zn zp = pairing.getZn();
+        BilinearGroup pairing = new BarretoNaehrigBilinearGroup(100); // eliptic curve with 100 bits security parameter
+        // Zn zp = pairing.getZn(); // scalar field containing all the big integers
+        // modulo the prime order p of the curve
 
-        //params for Pedersen Commitment
-        GroupElement g = pairing.getG1().getGenerator();
-        GroupElement h = pairing.getG1().getUniformlyRandomElement().compute();
+        // random points selected from G1 generator, acting as bases for exponents for
+        // Pedersen Commitment
+        GroupElement g1 = pairing.getG1().getGenerator();
+        GroupElement h1 = pairing.getG1().getUniformlyRandomElement().compute();
+        GroupElement g2 = pairing.getG2().getGenerator();
 
-        System.out.println("Running DKG protocol for CAs...");
+        System.out.println("Running DKG protocol with " + t + "-of-" + n + " threshold protocol for CAs...");
 
-        Zn.ZnElement a0 = zp.getUniformlyRandomElement(); //MASTER SECRET KEY
-        Zn.ZnElement a1 = zp.getUniformlyRandomElement(); //polynomial coefficient
+        // Se o threshold é no mínimo 2 de três, guarda-se o segredo num polinómio de
+        // grau 1, ou seja uma linha: f(x) = a1*x + a0
+        System.out.println("Initializing " + n + " CAs...");
+        List<CA> CAs = new ArrayList<>();
+        for (int i = 1; i <= n; i++) {
+            CAs.add(new CA(i, pairing));
+        }
 
-        GroupElement mpk = g.pow(a0).compute(); //Master Public Key = g ^ a0
+        // CAs generate their own polynomial
+        for (CA ca : CAs)
+            ca.generatePrivatePolynomial(t);
 
-        CA ca1 = new CA(1);
-        ca1.setKeyShare(a0.add(a1.mul(zp.valueOf(1))), mpk);
+        // CAs broadcast public keys to each other
+        List<GroupElement> pkG1s = new ArrayList<>();
+        List<GroupElement> pkG2s = new ArrayList<>();
+        for (CA ca : CAs) {
+            pkG1s.add(ca.getPublicKey(h1));
+            pkG2s.add(ca.getPublicKey(g2));
+        }
 
-        CA ca2 = new CA(2);
-        ca2.setKeyShare(a0.add(a1.mul(zp.valueOf(2))), mpk);
+        // CAs send polynomial evaluations to each other
+        // ex. CA 1 receives f1(1) from itself, f2(1) from CA 2, and f3(1) from CA 3
+        // synchronized broadcast exchange
+        List<List<Zn.ZnElement>> allCollectedShares = new ArrayList<>();
+        for (CA recipientCA : CAs) {
+            List<Zn.ZnElement> sharesForThisCA = new ArrayList<>();
+            for (CA senderCA : CAs) {
+                sharesForThisCA.add(senderCA.evaluatePolynomial(recipientCA.caID));
+            }
+            allCollectedShares.add(sharesForThisCA);
+        }
 
-        CA ca3 = new CA(3);
-        ca3.setKeyShare(a0.add(a1.mul(zp.valueOf(3))), mpk);
+        for (int i = 0; i < n; i++) {
+            CA current = CAs.get(i);
+            List<Zn.ZnElement> shares = allCollectedShares.get(i);
+            current.finalizeDKG(shares, pkG1s, pkG2s);
+        }
 
         System.out.println("CAs with threshold keys!");
 
         User user = new User(pairing);
 
         System.out.println("User generating blinded commitment...");
-        GroupElement commitment = user.createBlindedCommit(g, h);
+        GroupElement commitment = user.createBlindedCommit(g1, h1); // random point based on user info
 
-        System.out.println("Sending commitment to CA 1 and CA 2");
-        GroupElement share1 = ca1.issueSignatureShare(commitment);
-        GroupElement share2 = ca2.issueSignatureShare(commitment);
+        System.out.println("User is collecting " + t + " signatures shares from the CAs...");
+        List<GroupElement> gatheredShares = new ArrayList<>();
+        List<Integer> signerIDs = new ArrayList<>();
 
-        System.out.println("User aggregation shares...");
-        GroupElement aggregatedBlindedSignature = user.aggregateShares(share1, share2);
+        for (int i = 0; i < t; i++) {
+            CA selectedCA = CAs.get(i);
+            gatheredShares.add(selectedCA.issueSignatureShare(commitment));
+            signerIDs.add(selectedCA.caID);
+        }
 
-        GroupElement expectedSignature = commitment.pow(a0).compute();
+        System.out.println("User is aggregating the shares received...");
+        GroupElement aggregatedBlindedSignature = user.aggregateShares(gatheredShares, signerIDs);
 
-        if (aggregatedBlindedSignature.equals(expectedSignature))
+        GroupElement mpkG1 = CAs.get(0).getMasterPubKeyG1();
+        GroupElement mpkG2 = CAs.get(0).getMasterPubKeyG2();
+
+        System.out.println("User is unblinding the aggregated signature...");
+        GroupElement finalCredential = user.unblindSignature(aggregatedBlindedSignature, mpkG1);
+
+        System.out.println("Verifying if the final credencial is valid...");
+        boolean isValid = user.verifyCredential(finalCredential, mpkG2, g1, g2);
+        if (isValid)
             System.out.println("User successfully signed its attributes!");
         else
-            System.out.println("This did not work correctly.");
+            System.out.println("The credential obtained by the user is not valid.");
     }
 
 }
