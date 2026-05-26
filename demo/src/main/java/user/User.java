@@ -7,18 +7,31 @@ import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 import org.cryptimeleon.math.structures.rings.zn.Zn;
 
+import vrf.DodisYampolskiyVRF;
+import vrf.VRFResult;
+
 public class User {
 
     private Zn.ZnElement secretX;
     private Zn.ZnElement blindingFactor;
     private BilinearGroup pairing;
+    private GroupElement publicKeyG2;
 
     public User(BilinearGroup pairing) {
         this.pairing = pairing;
         Zn zp = pairing.getZn();
 
-        this.secretX = zp.getUniformlyRandomElement();
+        this.secretX = zp.getUniformlyRandomElement(); // user secret identity
+        this.publicKeyG2 = pairing.getG2().getGenerator().pow(secretX).compute(); // user pubKey
         this.blindingFactor = zp.getUniformlyRandomElement();
+    }
+
+    public GroupElement getPublicKeyG2() {
+        return this.publicKeyG2;
+    }
+
+    public VRFResult generateVRFPseudonym(DodisYampolskiyVRF vrf, String context) {
+        return vrf.buildProof(this.secretX, context);
     }
 
     public GroupElement createBlindedCommit(GroupElement g, GroupElement h) {

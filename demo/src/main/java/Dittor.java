@@ -1,5 +1,7 @@
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
@@ -9,6 +11,8 @@ import org.cryptimeleon.math.structures.rings.zn.Zn;
 import certificateauth.CA;
 import directoryauth.DA;
 import user.User;
+import vrf.DodisYampolskiyVRF;
+import vrf.VRFResult;
 
 public class Dittor {
 
@@ -96,8 +100,44 @@ public class Dittor {
 
         System.out.println("Verifying if the final credencial is valid...");
         boolean isValid = user.verifyCredential(finalCredential, mpkG2, g1, g2);
-        if (isValid)
+        if (isValid) {
             System.out.println("User successfully signed its attributes!");
+
+            System.out.println("\n--- Initiating SASSI protocol ---");
+
+            DodisYampolskiyVRF dyVRF = new DodisYampolskiyVRF(pairing);
+            String context = "TorRelay";
+
+            System.out.println("User is calculating VRF pseudonym for context: '" + context + "'...");
+            VRFResult vrf = user.generateVRFPseudonym(dyVRF, context);
+
+            System.out.println("Simulation of DA behaviour to be implemented in Rust--TODO");
+
+            boolean isVRFValid = dyVRF.isValid(user.getPublicKeyG2(), context, vrf);
+            System.out.println("VRF Proof validity: " + isVRFValid);
+
+            Set<GroupElement> activeNyms = new HashSet<>();
+
+            if (isVRFValid) {
+                System.out.println("DA behaviour in the Tor Consensus docs, to be implemented in Rust--TODO");
+
+                GroupElement pseudonym = vrf.getPseudonym();
+                if (!activeNyms.contains(pseudonym)) {
+                    activeNyms.add(pseudonym);
+                    System.out.println("Pseudonym added to Tor Consensus!");
+                } 
+
+                // just to check if it detects sybil attacks
+                System.out.println("Possible Sybil Attack!!");
+                GroupElement sybil = user.generateVRFPseudonym(dyVRF, context).getPseudonym();
+
+                if (activeNyms.contains(sybil)) {
+                    System.out.println("Sybil attack detected by: " + sybil + "!!");
+                } else {
+                    // em que casos e que isto acontece?
+                }
+            }
+        }
         else
             System.out.println("The credential obtained by the user is not valid.");
     }
