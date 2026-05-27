@@ -5,3 +5,18 @@ Sybil-resilient Anonymous Credential Issuance Scheme for Tor
 - Allows arbitrary threshold number and Certificate Authorities pool size, as long as t < n
 - Uses Pederson Distributed Key Generation to generate the keys for each CA
 - Partial blinded signatures are used for a Zero-Knowledge process 
+
+Protocol:
+
+1st Step:
+    - User attends an event trusted by The Tor Project, and manifests his interest in running a Tor Node
+    - Entity responsible for the event gives a random single-use code or a QR code to the user and registers this connection (avoiding sybils), with a secure protocol
+2nd Step:
+    - User logs into that Entity website (or another platform) on Tor with the single-use code
+    - Single-use code is used as secret identity x in the Pedersen Commitment, with a random blinding factor
+3rd Step:
+    - Entity runs code and sends the user's request to the CA's, which can be Servers run by trusted worldwide Tor entities
+    - User aggregates shares locally and computes the DY-VRF and the Schnorr Proof-of-Knowledge, and sends them to the DAs
+4th Step:
+    - DAs validate the credential and allow the User to run a Tor node!
+

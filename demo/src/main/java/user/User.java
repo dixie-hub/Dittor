@@ -8,6 +8,8 @@ import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 import org.cryptimeleon.math.structures.rings.zn.Zn;
 
 import vrf.DodisYampolskiyVRF;
+import vrf.Proof;
+import vrf.SchnorrZKP;
 import vrf.VRFResult;
 
 public class User {
@@ -37,6 +39,10 @@ public class User {
     public GroupElement createBlindedCommit(GroupElement g, GroupElement h) {
         return g.pow(secretX).op(h.pow(blindingFactor)).compute(); // Pedersen Commitment = (g^secretX) *
                                                                    // (h^blindingFactor)
+    }
+
+    public Proof generateSchnorrPoK(SchnorrZKP schnorrZKP, String context) {
+        return schnorrZKP.generateProof(this.secretX, this.publicKeyG2, context);
     }
 
     public GroupElement aggregateShares(List<GroupElement> sigShares, List<Integer> signerIDs) {

@@ -12,6 +12,8 @@ import certificateauth.CA;
 import directoryauth.DA;
 import user.User;
 import vrf.DodisYampolskiyVRF;
+import vrf.Proof;
+import vrf.SchnorrZKP;
 import vrf.VRFResult;
 
 public class Dittor {
@@ -106,19 +108,27 @@ public class Dittor {
             System.out.println("\n--- Initiating SASSI protocol ---");
 
             DodisYampolskiyVRF dyVRF = new DodisYampolskiyVRF(pairing);
+            SchnorrZKP schnorrZKP = new SchnorrZKP(pairing);
             String context = "TorRelay";
 
             System.out.println("User is calculating VRF pseudonym for context: '" + context + "'...");
             VRFResult vrf = user.generateVRFPseudonym(dyVRF, context);
 
+            System.out.println("User generating Zero-Knowledge Proof of matching identities between VRF and signed identity...");
+            Proof proofOfKnowledge = user.generateSchnorrPoK(schnorrZKP, context);
+
             System.out.println("Simulation of DA behaviour to be implemented in Rust--TODO");
+
+            boolean isZKPValid = schnorrZKP.verifyProof(user.getPublicKeyG2(), context, proofOfKnowledge);
+            System.out.println("Zero-Knowledge Proof Validity: " + isZKPValid);
 
             boolean isVRFValid = dyVRF.isValid(user.getPublicKeyG2(), context, vrf);
             System.out.println("VRF Proof validity: " + isVRFValid);
 
             Set<GroupElement> activeNyms = new HashSet<>();
 
-            if (isVRFValid) {
+            if (isZKPValid && isVRFValid) {
+                System.out.println("Cryptographic verification was successfull");
                 System.out.println("DA behaviour in the Tor Consensus docs, to be implemented in Rust--TODO");
 
                 GroupElement pseudonym = vrf.getPseudonym();
@@ -130,12 +140,12 @@ public class Dittor {
                 // just to check if it detects sybil attacks
                 System.out.println("Possible Sybil Attack!!");
                 GroupElement sybil = user.generateVRFPseudonym(dyVRF, context).getPseudonym();
+                Proof sybilProof = user.generateSchnorrPoK(schnorrZKP, context);
 
-                if (activeNyms.contains(sybil)) {
+                boolean isSybilZKPValid = schnorrZKP.verifyProof(user.getPublicKeyG2(), context, sybilProof);
+
+                if (isSybilZKPValid && activeNyms.contains(sybil)) 
                     System.out.println("Sybil attack detected by: " + sybil + "!!");
-                } else {
-                    // em que casos e que isto acontece?
-                }
             }
         }
         else
