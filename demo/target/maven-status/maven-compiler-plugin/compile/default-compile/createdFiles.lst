@@ -1,3 +1,4 @@
+babel\messages\RegisterRelayMessage.class
 vrf\Proof.class
 vrf\SchnorrZKP.class
 directoryauth\DA.class

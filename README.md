@@ -20,3 +20,20 @@ Protocol:
 4th Step:
     - DAs validate the credential and allow the User to run a Tor node!
 
+src/main/java/
+└── app/
+    ├── Main.java                        // Bootstraps Babel, reads config, starts protocols
+    ├── protocols/
+    │   ├── UserProtocol.java            // (extends GenericProtocol) Handles User logic
+    │   ├── CAProtocol.java              // (extends GenericProtocol) Handles CA signing logic
+    │   └── DAProtocol.java              // (extends GenericProtocol) Handles DA verification
+    ├── messages/
+    │   ├── ca/
+    │   │   ├── CredentialRequestMessage.java   // User -> CA (Sends blinded commitment)
+    │   │   └── CredentialReplyMessage.java     // CA -> User (Returns signature share)
+    │   └── da/
+    │       ├── RegisterRelayMessage.java       // User -> DA (Sends PK, VRF, ZKP) - We just built this!
+    │       └── RegisterRelayReplyMessage.java  // DA -> User (Success/Fail boolean)
+    └── utils/
+        └── CryptimeleonSetup.java       // Centralized BilinearGroup initialization
+

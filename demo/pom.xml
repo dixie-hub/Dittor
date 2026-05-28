@@ -18,6 +18,13 @@
     <maven.compiler.target>1.8</maven.compiler.target>
   </properties>
 
+  <repositories>
+    <repository>
+      <id>novasys-mvn</id>
+      <url>https://novasys.di.fct.unl.pt/packages/mvn</url>
+    </repository>
+  </repositories>
+
   <dependencies>
     <dependency>
       <groupId>junit</groupId>
@@ -34,6 +41,11 @@
       <groupId>org.cryptimeleon</groupId>
       <artifactId>craco</artifactId>
       <version>4.0.0</version>
+    </dependency>
+    <dependency>
+      <groupId>pt.unl.fct.di.novasys.babel</groupId>
+      <artifactId>babel-core</artifactId>
+      <version>1.0.5</version>
     </dependency>
   </dependencies>
 
