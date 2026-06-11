@@ -52,9 +52,13 @@ public class RegisterRelayMsg extends ProtoMessage {
                 JSONConverter jsonConverter = new JSONConverter();
 
                 String pkStr = jsonConverter.serialize(msg.userPublicKeyG2.getRepresentation());
+                System.out.println("NYM CLASS: " + msg.vrfData.getPseudonym().getClass().getName());
+                System.out.println("NYM REP CLASS: " + msg.vrfData.getPseudonym().getRepresentation().getClass().getName());
+                System.out.println("ZKP REP CLASS: " + msg.vrfData.getZeroKnowledgeProof().getRepresentation().getClass().getName());
                 String nymStr = jsonConverter.serialize(msg.vrfData.getPseudonym().getRepresentation());
                 String zkpStr = jsonConverter.serialize(msg.vrfData.getZeroKnowledgeProof().getRepresentation());
-                String proofChallengeStr = jsonConverter.serialize(msg.identityProof.getChallenge().getRepresentation());
+                String proofChallengeStr = jsonConverter
+                        .serialize(msg.identityProof.getChallenge().getRepresentation());
                 String proofResponseStr = jsonConverter.serialize(msg.identityProof.getResponse().getRepresentation());
 
                 byte[] contextBytes = msg.getContext().getBytes(StandardCharsets.UTF_8);
@@ -84,19 +88,33 @@ public class RegisterRelayMsg extends ProtoMessage {
                 String proofChallengeStr = readString(in);
                 String proofResponseStr = readString(in);
 
-                // restoring raw bytes into curve coordinates
-                GroupElement pk = pairing.getG2().restoreElement(jsonConverter.deserialize(pkStr));
-                GroupElement nym = pairing.getG2().restoreElement(jsonConverter.deserialize(nymStr));
-                GroupElement zkp = pairing.getG2().restoreElement(jsonConverter.deserialize(zkpStr));
+                System.out.println("\n===== DESERIALIZATION WIRE DATA DIAGNOSTIC ====");
+                System.out.println("pkStr representation type: " + jsonConverter.deserialize(pkStr).getClass().getSimpleName());
+                System.out.println("nymStr representation type: " + jsonConverter.deserialize(nymStr).getClass().getSimpleName());
+                System.out.println("zkpStr representation type: " + jsonConverter.deserialize(zkpStr).getClass().getSimpleName());
+                System.out.println("proofChallengeStr representation type: " + jsonConverter.deserialize(proofChallengeStr).getClass().getSimpleName());
+                System.out.println("proofResponseStr representation type: " + jsonConverter.deserialize(proofResponseStr).getClass().getSimpleName());
+                System.out.println("======================================\n");
 
-                Zn zn = pairing.getZn();
-                Zn.ZnElement challenge = zn.restoreElement(jsonConverter.deserialize(proofChallengeStr));
-                Zn.ZnElement response = zn.restoreElement(jsonConverter.deserialize(proofResponseStr));
+                try {
+                    // restoring raw bytes into curve coordinates
+                    GroupElement pk = pairing.getG2().restoreElement(jsonConverter.deserialize(pkStr));
+                    GroupElement nym = pairing.getGT().restoreElement(jsonConverter.deserialize(nymStr));
+                    GroupElement zkp = pairing.getG2().restoreElement(jsonConverter.deserialize(zkpStr));
 
-                VRFResult vrfData = new VRFResult(nym, zkp);
-                Proof identityProof = new Proof(challenge, response);
+                    Zn zn = pairing.getZn();
+                    Zn.ZnElement challenge = zn.restoreElement(jsonConverter.deserialize(proofChallengeStr));
+                    Zn.ZnElement response = zn.restoreElement(jsonConverter.deserialize(proofResponseStr));
 
-                return new RegisterRelayMsg(pk, vrfData, identityProof, context);
+                    VRFResult vrfData = new VRFResult(nym, zkp);
+                    Proof identityProof = new Proof(challenge, response);
+
+                    return new RegisterRelayMsg(pk, vrfData, identityProof, context);
+                } catch (Exception e) {
+                    System.out.println("Error: ");
+                    e.printStackTrace();
+                    throw new RuntimeException("Failed to decode message components.");
+                }
             }
 
             private void writeString(ByteBuf out, String str) {
@@ -112,6 +130,6 @@ public class RegisterRelayMsg extends ProtoMessage {
                 return new String(bytes, StandardCharsets.UTF_8);
             }
         };
-    } 
-    
+    }
+
 }

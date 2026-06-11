@@ -1,8 +1,11 @@
 package dittor;
+
+import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.Properties;
 
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
@@ -13,13 +16,22 @@ import dittor.crypto.CA;
 import dittor.crypto.DA;
 import dittor.crypto.User;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
-import dittor.crypto.vrf.Proof;
 import dittor.crypto.vrf.SchnorrZKP;
-import dittor.crypto.vrf.VRFResult;
+import dittor.protocols.CAProtocol;
+import dittor.protocols.DAProtocol;
+import dittor.protocols.UserProtocol;
+
+import pt.unl.fct.di.novasys.babel.core.Babel;
+import pt.unl.fct.di.novasys.network.data.Host;
 
 public class Main {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+
+        // ---------------------------------------------------------
+        // 1. CRYPTOGRAPHIC SETUP (Simulating a Trusted Dealer phase)
+        // ---------------------------------------------------------
+
         // threshold t and CAs pool size n
         int t = 2;
         int n = 3;
@@ -35,7 +47,7 @@ public class Main {
         GroupElement h1 = pairing.getG1().getUniformlyRandomElement().compute();
         GroupElement g2 = pairing.getG2().getGenerator();
 
-        System.out.println("Running DKG protocol with " + t + "-of-" + n + " threshold protocol for CAs...");
+        System.out.println("Running DKG protocol with " + t + "-of-" + n + " threshold for CAs...");
 
         // Se o threshold é no mínimo 2 de três, guarda-se o segredo num polinómio de
         // grau 1, ou seja uma linha: f(x) = a1*x + a0
@@ -69,88 +81,79 @@ public class Main {
             allCollectedShares.add(sharesForThisCA);
         }
 
+        for (int i = 0; i < n; i++)
+            CAs.get(i).finalizeDKG(allCollectedShares.get(i), pkG1s, pkG2s);
+
+        System.out.println("DKG Complete. Master keys established.");
+
+        // ---------------------------------------------------------
+        // 2. BABEL NETWORK
+        // ---------------------------------------------------------
+
+        System.out.println("\n--- Initializing Babel Network Framework ---");
+        Babel babel = Babel.getInstance();
+        String localhost = InetAddress.getByName("127.0.0.1").getHostAddress();
+
+        // Setup DA on port 9000
+        System.out.println("Starting DA node on port 9000");
+        DA cryptoDA = new DA();
+        DAProtocol daProtocol = new DAProtocol(pairing, cryptoDA);
+        Properties daProperties = new Properties();
+        daProperties.setProperty("address", localhost);
+        daProperties.setProperty("port", "9000");
+        Host daHost = new Host(InetAddress.getByName(localhost), 9000);
+
+        babel.registerProtocol(daProtocol);
+        daProtocol.init(daProperties);
+
+        // Setup CA on ports 9001, 9002, 9003...
+        Map<Host, Integer> caNetworkMap = new HashMap<>();
+        int caBasePort = 9000;
+
         for (int i = 0; i < n; i++) {
-            CA current = CAs.get(i);
-            List<Zn.ZnElement> shares = allCollectedShares.get(i);
-            current.finalizeDKG(shares, pkG1s, pkG2s);
+            int caPort = caBasePort + CAs.get(i).caID;
+            System.out.println("Starting CA-" + CAs.get(i).caID + " node on port " + caPort + "...");
+
+            CAProtocol caProtocol = new CAProtocol(pairing, CAs.get(i), CAs.get(i).caID);
+            Properties caProps = new Properties();
+            caProps.setProperty("address", localhost);
+            caProps.setProperty("port", String.valueOf(caPort));
+
+            Host caHost = new Host(InetAddress.getByName(localhost), caPort);
+            caNetworkMap.put(caHost, CAs.get(i).caID);
+
+            babel.registerProtocol(caProtocol);
+            caProtocol.init(caProps);
         }
 
-        System.out.println("CAs with threshold keys!");
-
-        User user = new User(pairing);
-
-        System.out.println("User generating blinded commitment...");
-        GroupElement commitment = user.createBlindedCommit(g1, h1); // random point based on user info
-
-        System.out.println("User is collecting " + t + " signatures shares from the CAs...");
-        List<GroupElement> gatheredShares = new ArrayList<>();
-        List<Integer> signerIDs = new ArrayList<>();
-
-        for (int i = 0; i < t; i++) {
-            CA selectedCA = CAs.get(i);
-            gatheredShares.add(selectedCA.issueSignatureShare(commitment));
-            signerIDs.add(selectedCA.caID);
-        }
-
-        System.out.println("User is aggregating the shares received...");
-        GroupElement aggregatedBlindedSignature = user.aggregateShares(gatheredShares, signerIDs);
-
-        GroupElement mpkG1 = CAs.get(0).getMasterPubKeyG1();
+        // Setup User Node on port 8000
+        System.out.println("Starting User node on port 8000...");
+        User cryptoUser = new User(pairing);
+        DodisYampolskiyVRF vrf = new DodisYampolskiyVRF(pairing);
+        SchnorrZKP schnorr = new SchnorrZKP(pairing);
+        GroupElement mpkG1 = CAs.get(0).getMasterPubKeyG1(); // master keys from DKG phase
         GroupElement mpkG2 = CAs.get(0).getMasterPubKeyG2();
 
-        System.out.println("User is unblinding the aggregated signature...");
-        GroupElement finalCredential = user.unblindSignature(aggregatedBlindedSignature, mpkG1);
+        UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, g1, h1, mpkG1, mpkG2, g1, g2);
+        Properties userProperties = new Properties();
+        userProperties.setProperty("address", localhost);
+        userProperties.setProperty("port", "8000");
 
-        System.out.println("Verifying if the final credencial is valid...");
-        boolean isValid = user.verifyCredential(finalCredential, mpkG2, g1, g2);
-        if (isValid) {
-            System.out.println("User successfully signed its attributes!");
+        babel.registerProtocol(userProtocol);
+        userProtocol.init(userProperties);
 
-            System.out.println("\n--- Initiating SASSI protocol ---");
+        // Start Babel
+        babel.start();
+        System.out.println("Babel successfully running");
 
-            DodisYampolskiyVRF dyVRF = new DodisYampolskiyVRF(pairing);
-            SchnorrZKP schnorrZKP = new SchnorrZKP(pairing);
-            String context = "TorRelay";
+        // extra time to make sure server sockets bind to the OS ports
+        Thread.sleep(1000);
 
-            System.out.println("User is calculating VRF pseudonym for context: '" + context + "'...");
-            VRFResult vrf = user.generateVRFPseudonym(dyVRF, context);
-
-            System.out.println("User generating Zero-Knowledge Proof of matching identities between VRF and signed identity...");
-            Proof proofOfKnowledge = user.generateSchnorrPoK(schnorrZKP, context);
-
-            System.out.println("Simulation of DA behaviour to be implemented in Rust--TODO");
-
-            boolean isZKPValid = schnorrZKP.verifyProof(user.getPublicKeyG2(), context, proofOfKnowledge);
-            System.out.println("Zero-Knowledge Proof Validity: " + isZKPValid);
-
-            boolean isVRFValid = dyVRF.isValid(user.getPublicKeyG2(), context, vrf);
-            System.out.println("VRF Proof validity: " + isVRFValid);
-
-            Set<GroupElement> activeNyms = new HashSet<>();
-
-            if (isZKPValid && isVRFValid) {
-                System.out.println("Cryptographic verification was successfull");
-                System.out.println("DA behaviour in the Tor Consensus docs, to be implemented in Rust--TODO");
-
-                GroupElement pseudonym = vrf.getPseudonym();
-                if (!activeNyms.contains(pseudonym)) {
-                    activeNyms.add(pseudonym);
-                    System.out.println("Pseudonym added to Tor Consensus!");
-                } 
-
-                // just to check if it detects sybil attacks
-                System.out.println("Possible Sybil Attack!!");
-                GroupElement sybil = user.generateVRFPseudonym(dyVRF, context).getPseudonym();
-                Proof sybilProof = user.generateSchnorrPoK(schnorrZKP, context);
-
-                boolean isSybilZKPValid = schnorrZKP.verifyProof(user.getPublicKeyG2(), context, sybilProof);
-
-                if (isSybilZKPValid && activeNyms.contains(sybil)) 
-                    System.out.println("Sybil attack detected by: " + sybil + "!!");
-            }
-        }
-        else
-            System.out.println("The credential obtained by the user is not valid.");
+        // ---------------------------------------------------------
+        // 3. TRIGGER PROTOCOL EXECUTION
+        // ---------------------------------------------------------
+        System.out.println("Triggering User Protocol to begin network handshake...");
+        userProtocol.startRegistration(caNetworkMap, daHost);
     }
 
 }

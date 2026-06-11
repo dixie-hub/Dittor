@@ -45,6 +45,9 @@ public class DodisYampolskiyVRF {
         GroupElement pi = g1.pow(exponent).compute();
         GroupElement y = gpairing.pow(exponent).compute();
 
+        pi = pi.compute();
+        y = y.compute();
+
         return new VRFResult(y, pi);
     }
 

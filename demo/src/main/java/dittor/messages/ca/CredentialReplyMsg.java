@@ -47,6 +47,7 @@ public class CredentialReplyMsg extends ProtoMessage {
 
             @Override
             public CredentialReplyMsg deserialize(ByteBuf in) {
+                System.out.println("[DEBUG-SERIALIZER] Incoming bytes detected for CredentialReplyMsg...");
                 int caID = in.readInt();
 
                 int len = in.readInt();

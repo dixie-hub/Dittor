@@ -1,9 +1,0 @@
-babel\messages\RegisterRelayMessage.class
-vrf\Proof.class
-vrf\SchnorrZKP.class
-directoryauth\DA.class
-certificateauth\CA.class
-vrf\VRFResult.class
-Dittor.class
-vrf\DodisYampolskiyVRF.class
-user\User.class
