@@ -63,7 +63,7 @@ public class CAProtocol extends GenericProtocol {
 
         CredentialReplyMsg reply = new CredentialReplyMsg(this.caID, signatureShare);
 
-        System.out.println("[CA- ]" + caID + "] Opening outbound reply channel back to: " + from);
+        System.out.println("[CA-" + caID + "] Opening outbound reply channel back to: " + from);
         openConnection(from, channelID);
 
         System.out.println("[CA-" + caID + "] Dispatching partial share back to " + from);

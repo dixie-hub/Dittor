@@ -52,9 +52,6 @@ public class RegisterRelayMsg extends ProtoMessage {
                 JSONConverter jsonConverter = new JSONConverter();
 
                 String pkStr = jsonConverter.serialize(msg.userPublicKeyG2.getRepresentation());
-                System.out.println("NYM CLASS: " + msg.vrfData.getPseudonym().getClass().getName());
-                System.out.println("NYM REP CLASS: " + msg.vrfData.getPseudonym().getRepresentation().getClass().getName());
-                System.out.println("ZKP REP CLASS: " + msg.vrfData.getZeroKnowledgeProof().getRepresentation().getClass().getName());
                 String nymStr = jsonConverter.serialize(msg.vrfData.getPseudonym().getRepresentation());
                 String zkpStr = jsonConverter.serialize(msg.vrfData.getZeroKnowledgeProof().getRepresentation());
                 String proofChallengeStr = jsonConverter
@@ -88,19 +85,11 @@ public class RegisterRelayMsg extends ProtoMessage {
                 String proofChallengeStr = readString(in);
                 String proofResponseStr = readString(in);
 
-                System.out.println("\n===== DESERIALIZATION WIRE DATA DIAGNOSTIC ====");
-                System.out.println("pkStr representation type: " + jsonConverter.deserialize(pkStr).getClass().getSimpleName());
-                System.out.println("nymStr representation type: " + jsonConverter.deserialize(nymStr).getClass().getSimpleName());
-                System.out.println("zkpStr representation type: " + jsonConverter.deserialize(zkpStr).getClass().getSimpleName());
-                System.out.println("proofChallengeStr representation type: " + jsonConverter.deserialize(proofChallengeStr).getClass().getSimpleName());
-                System.out.println("proofResponseStr representation type: " + jsonConverter.deserialize(proofResponseStr).getClass().getSimpleName());
-                System.out.println("======================================\n");
-
                 try {
                     // restoring raw bytes into curve coordinates
                     GroupElement pk = pairing.getG2().restoreElement(jsonConverter.deserialize(pkStr));
                     GroupElement nym = pairing.getGT().restoreElement(jsonConverter.deserialize(nymStr));
-                    GroupElement zkp = pairing.getG2().restoreElement(jsonConverter.deserialize(zkpStr));
+                    GroupElement zkp = pairing.getG1().restoreElement(jsonConverter.deserialize(zkpStr));
 
                     Zn zn = pairing.getZn();
                     Zn.ZnElement challenge = zn.restoreElement(jsonConverter.deserialize(proofChallengeStr));
