@@ -3,6 +3,10 @@
 *.la
 *.lo
 *~
+*.Po
+*.Plo
+.dirstamp
+*.dirstamp
 
 stamp-h*
 test-driver
