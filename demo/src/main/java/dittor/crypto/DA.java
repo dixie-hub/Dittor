@@ -18,12 +18,12 @@ public class DA {
     }
 
     public boolean verifyVrf(VRFResult vrfData, String context) {
-        System.out.println("[DA-Crypto-Stub] Bypassing VRF verification check"); //TODO: implement this in the C code
+        System.out.println("[DA-Crypto-Stub] Bypassing VRF verification check"); 
         return true;
     }
 
     public boolean verifyIdentityProof(GroupElement userPubKeyG2, Proof identityProof, String context) {
-        System.out.println("[DA-Crypto-Stub] Bypassing Schnorr identity ZKP check"); //TODO: implement this in the C code
+        System.out.println("[DA-Crypto-Stub] Bypassing Schnorr identity ZKP check");
         return true;
     }
 

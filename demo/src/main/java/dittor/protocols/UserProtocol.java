@@ -170,7 +170,7 @@ public class UserProtocol extends GenericProtocol {
         else
             System.err.println("Registration denied: " + msg.getStatusMessage());
 
-        System.out.println("[User] Execution cycle complete, shutting down system runtime.");
-        System.exit(0);
+        System.out.println("[User] Execution cycle complete.");
+        //System.exit(0);
     }
 }

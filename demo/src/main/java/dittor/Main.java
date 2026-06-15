@@ -20,7 +20,7 @@ import dittor.crypto.vrf.SchnorrZKP;
 import dittor.protocols.CAProtocol;
 import dittor.protocols.DAProtocol;
 import dittor.protocols.UserProtocol;
-
+import dittor.tor.DAServer;
 import pt.unl.fct.di.novasys.babel.core.Babel;
 import pt.unl.fct.di.novasys.network.data.Host;
 
@@ -150,7 +150,16 @@ public class Main {
         Thread.sleep(1000);
 
         // ---------------------------------------------------------
-        // 3. TRIGGER PROTOCOL EXECUTION
+        // 3. START TOR BRIDGE
+        // ---------------------------------------------------------
+        System.out.println("Starting Tor bridge on port 8081...");
+
+        DAServer torBridge = new DAServer(8081, pairing, cryptoDA);
+        Thread torBridgeThread = new Thread(torBridge);
+        torBridgeThread.start();
+
+        // ---------------------------------------------------------
+        // 4. TRIGGER PROTOCOL EXECUTION
         // ---------------------------------------------------------
         System.out.println("Triggering User Protocol to begin network handshake...");
         userProtocol.startRegistration(caNetworkMap, daHost);
