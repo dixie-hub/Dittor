@@ -1,0 +1,10 @@
+*.o
+*.a
+*.la
+*.lo
+*~
+
+stamp-h*
+test-driver
+Makefile
+Makefile.in
