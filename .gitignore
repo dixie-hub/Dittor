@@ -12,3 +12,6 @@ stamp-h*
 test-driver
 Makefile
 Makefile.in
+
+demo/target/
+*.class
