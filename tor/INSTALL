@@ -1,0 +1,20 @@
+Most users who realize that INSTALL files still exist should simply
+follow the directions at
+https://support.torproject.org/little-t-tor/getting-started/installing/#source
+
+If you got the source from git, run "./autogen.sh", which will
+run the various auto* programs. Then you can run ./configure, and
+refer to the above instructions.
+
+If it doesn't build for you:
+
+  If you have problems finding libraries, try
+    CPPFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/lib" \
+    ./configure
+  or
+    ./configure --with-libevent-dir=/usr/local
+  rather than simply ./configure.
+
+If you are on an Apple Silicon you probably want to invoke ./configure with the
+CPPFLAGS and LDFLAGS as above, except that you probably need to use
+/opt/homebrew/include and /opt/homebrew/lib instead of /usr/local.
