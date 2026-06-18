@@ -87,6 +87,13 @@ public class Main {
         System.out.println("DKG Complete. Master keys established.");
 
         // ---------------------------------------------------------
+        // Initializing Dodis-Yampolskiy and Schnorr engines
+        // ---------------------------------------------------------
+
+        DodisYampolskiyVRF vrf = new DodisYampolskiyVRF(pairing);
+        SchnorrZKP schnorr = new SchnorrZKP(pairing);
+
+        // ---------------------------------------------------------
         // 2. BABEL NETWORK
         // ---------------------------------------------------------
 
@@ -96,7 +103,7 @@ public class Main {
 
         // Setup DA on port 9000
         System.out.println("Starting DA node on port 9000");
-        DA cryptoDA = new DA();
+        DA cryptoDA = new DA(vrf, schnorr);
         DAProtocol daProtocol = new DAProtocol(pairing, cryptoDA);
         Properties daProperties = new Properties();
         daProperties.setProperty("address", localhost);
@@ -129,12 +136,11 @@ public class Main {
         // Setup User Node on port 8000
         System.out.println("Starting User node on port 8000...");
         User cryptoUser = new User(pairing);
-        DodisYampolskiyVRF vrf = new DodisYampolskiyVRF(pairing);
-        SchnorrZKP schnorr = new SchnorrZKP(pairing);
         GroupElement mpkG1 = CAs.get(0).getMasterPubKeyG1(); // master keys from DKG phase
         GroupElement mpkG2 = CAs.get(0).getMasterPubKeyG2();
 
-        UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, g1, h1, mpkG1, mpkG2, g1, g2);
+        UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, g1, h1, mpkG1, mpkG2, g1,
+                g2);
         Properties userProperties = new Properties();
         userProperties.setProperty("address", localhost);
         userProperties.setProperty("port", "8000");

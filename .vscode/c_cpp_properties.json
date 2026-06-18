@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Win32-WSL-Headers",
+            "includePath": [
+                "${workspaceFolder}/tor/src",
+                "${workspaceFolder}/tor/src/core",
+                "${workspaceFolder}/tor/src/lib",
+                "${workspaceFolder}/tor/src/feature/dirparse",
+                "\\\\wsl$\\Ubuntu\\usr\\include",
+                "\\\\wsl$\\Ubuntu\\usr\\include\\x86_64-linux-gnu",
+                "\\\\wsl$\\Ubuntu\\usr\\lib\\gcc\\x86_64-linux-gnu\\11\\include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "HAVE_CONFIG_H"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

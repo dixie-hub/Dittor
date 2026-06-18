@@ -72,7 +72,7 @@ public class DAServer implements Runnable {
                                 Proof identityProof = new Proof(challenge, response);
 
                                 System.out.println("[DA-Server] Processing Tor descriptor tokens...");
-                                boolean isVrfValid = cryptoDA.verifyVrf(vrfData, context);
+                                boolean isVrfValid = cryptoDA.verifyVrf(pk, vrfData, context);
                                 boolean isZkpValid = cryptoDA.verifyIdentityProof(pk, identityProof, context);
 
                                 isValid = isVrfValid && isZkpValid;

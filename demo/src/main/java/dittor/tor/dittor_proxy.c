@@ -35,3 +35,15 @@ char* dittorProxy(int port, const char* message) {
 
     return NULL;
 }
+
+int main() {
+    printf("Testing proxy socket connection...\n");
+    char* response = dittorProxy(8081, "VALIDATE test_context|pk|nym|zkp|challenge|response\n");
+    if (response) {
+        printf("Server responded: %s\n", response);
+        free(response);
+    } else {
+        printf("Failed to connect to Java server.\n");
+    }
+    return 0;
+}

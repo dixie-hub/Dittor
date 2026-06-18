@@ -43,7 +43,7 @@ public class DAProtocol extends GenericProtocol {
     private void handleRegisterRelay(RegisterRelayMsg msg, Host from, short sourceProto, int channel) {
         System.out.println("[DA] Verifying Sybil defense tokens for incoming Relay registration...");
 
-        boolean isVrfValid = cryptoDA.verifyVrf(msg.getVrfData(), msg.getContext());
+        boolean isVrfValid = cryptoDA.verifyVrf(msg.getUserPubKeyG2(), msg.getVrfData(), msg.getContext());
         boolean isZkpValid = cryptoDA.verifyIdentityProof(msg.getUserPubKeyG2(), msg.getIdentityProof(), msg.getContext());
 
         RegisterRelayReplyMsg reply;

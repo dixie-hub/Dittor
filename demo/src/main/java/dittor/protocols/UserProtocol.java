@@ -165,12 +165,14 @@ public class UserProtocol extends GenericProtocol {
     }
 
     private void handleRegisterRelayReply(RegisterRelayReplyMsg msg, Host from, short sourceProto, int channel) {
-        if (msg.isSuccess())
+        if (msg.isSuccess()) {
             System.out.println("Registration approved: " + msg.getStatusMessage());
-        else
+            System.out.println("[User] Staying alive to host the DAServer bridge on port 8081...");
+        }
+        else {
             System.err.println("Registration denied: " + msg.getStatusMessage());
-
-        System.out.println("[User] Execution cycle complete.");
-        //System.exit(0);
+            System.out.println("[User] Execution cycle failed, shutting down system");
+            System.exit(1);
+        }
     }
 }
