@@ -9,7 +9,8 @@ LIBTOR_APP_A_SOURCES += 			\
 	src/feature/dirparse/routerparse.c	\
 	src/feature/dirparse/sigcommon.c	\
 	src/feature/dirparse/signing.c		\
-	src/feature/dirparse/unparseable.c
+	src/feature/dirparse/unparseable.c		\
+	src/feature/dirparse/dittor_proxy.c
 
 # ADD_C_FILE: INSERT HEADERS HERE.
 noinst_HEADERS +=					\

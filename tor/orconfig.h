@@ -27,7 +27,7 @@
 #define CONFDIR "/usr/local/etc/tor"
 
 /* Flags passed to configure */
-#define CONFIG_FLAGS "--disable-asciidoc"
+#define CONFIG_FLAGS "--disable-asciidoc --no-create --no-recursion"
 
 /* Enable smartlist debugging */
 /* #undef DEBUG_SMARTLIST */

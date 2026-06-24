@@ -187,6 +187,8 @@ typedef enum {
   C_DESCRIPTOR_COOKIE,
   C_CLIENT_KEY,
 
+  K_OPT_DITTOR_PROOF,
+
   ERR_,
   EOF_,
   NIL_

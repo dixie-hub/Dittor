@@ -81,6 +81,9 @@
 
 /****************************************************************************/
 
+/* Prototype function statement for the Dittor socket loopback bridge */
+char *dittorProxy(int port, const char *payload);
+
 /** List of tokens recognized in router descriptors */
 // clang-format off
 const token_rule_t routerdesc_token_table[] = {
@@ -123,6 +126,9 @@ const token_rule_t routerdesc_token_table[] = {
   T1( "bandwidth",           K_BANDWIDTH,           GE(3),   NO_OBJ ),
   A01("@purpose",            A_PURPOSE,             GE(1),   NO_OBJ ),
   T01("tunnelled-dir-server",K_DIR_TUNNELLED,       NO_ARGS, NO_OBJ ),
+
+  //--- DITTOR ---
+  T01("dittor-proof", K_OPT_DITTOR_PROOF, GE(6), NO_OBJ),
 
   END_OF_TABLE
 };
@@ -626,7 +632,7 @@ router_parse_entry_from_string(const char *s, const char *end,
 
   tok = find_by_keyword(tokens, K_SIGNING_KEY);
   router->identity_pkey = tok->key;
-  tok->key = NULL; /* Prevent free */
+  tok->key = NULL; 
   if (crypto_pk_get_digest(router->identity_pkey,
                            router->cache_info.identity_digest)) {
     log_warn(LD_DIR, "Couldn't calculate key digest"); goto err;
@@ -639,7 +645,6 @@ router_parse_entry_from_string(const char *s, const char *end,
     ed_cert_tok = find_by_keyword(tokens, K_IDENTITY_ED25519);
     master_key_tok = find_by_keyword(tokens, K_MASTER_KEY_ED25519);
     cc_ntor_tok = find_by_keyword(tokens, K_NTOR_ONION_KEY_CROSSCERT);
-    /* This, and only this, is optional. */
     cc_tap_tok = find_opt_by_keyword(tokens, K_ONION_KEY_CROSSCERT);
 
     if (bool_neq(cc_tap_tok==NULL, router->tap_onion_pkey==NULL)) {
@@ -654,7 +659,6 @@ router_parse_entry_from_string(const char *s, const char *end,
 
     tor_cert_t *cert;
     {
-      /* Parse the identity certificate */
       cert = tor_cert_parse(
                        (const uint8_t*)ed_cert_tok->object_body,
                        ed_cert_tok->object_size);
@@ -662,7 +666,6 @@ router_parse_entry_from_string(const char *s, const char *end,
         log_warn(LD_DIR, "Couldn't parse ed25519 cert");
         goto err;
       }
-      /* makes sure it gets freed. */
       router->cache_info.signing_key_cert = cert;
 
       if (cert->cert_type != CERT_TYPE_ID_SIGNING ||
@@ -728,8 +731,6 @@ router_parse_entry_from_string(const char *s, const char *end,
       const char *signed_start, *signed_end;
 
       if (master_key_tok) {
-        /* This token is optional, but if it's present, it must match
-         * the signature in the signing cert, or supplant it. */
         tor_assert(master_key_tok->n_args >= 1);
         ed25519_public_key_t pkey;
         if (ed25519_public_from_base64(&pkey, master_key_tok->args[0])<0) {
@@ -806,13 +807,11 @@ router_parse_entry_from_string(const char *s, const char *end,
         goto err;
       }
 
-      /* We check this before adding it to the routerlist. */
       router->cert_expiration_time = expires;
     }
   }
 
   if ((tok = find_opt_by_keyword(tokens, K_FINGERPRINT))) {
-    /* If there's a fingerprint line, it must match the identity digest. */
     char d[DIGEST_LEN];
     tor_assert(tok->n_args == 1);
     tor_strstrip(tok->args[0], " ");
@@ -945,11 +944,47 @@ router_parse_entry_from_string(const char *s, const char *end,
     router->wants_to_be_hs_dir = 1;
   }
 
-  /* This router accepts tunnelled directory requests via begindir if it has
-   * an open dirport or it included "tunnelled-dir-server". */
   if (find_opt_by_keyword(tokens, K_DIR_TUNNELLED) ||
       router->ipv4_dirport > 0) {
     router->supports_tunnelled_dir_requests = 1;
+  }
+
+  // DITTOR START
+  if ((tok = find_opt_by_keyword(tokens, K_OPT_DITTOR_PROOF))) {
+      if (tok->n_args >= 6) {
+          char validation_payload[8192];
+          
+          int printed = snprintf(validation_payload, sizeof(validation_payload),
+               "VALIDATE %s|%s|%s|%s|%s|%s\n",
+               tok->args[0], tok->args[1], tok->args[2], 
+               tok->args[3], tok->args[4], tok->args[5]);
+
+          if (printed >= (int)sizeof(validation_payload)) {
+              log_warn(LD_DIR, "[Tor-Dittor] Cryptographic token size exceeded buffer allocation.");
+              goto err;
+          } else {
+              log_notice(LD_DIR, "[Tor-Dittor] Passing descriptor payloads to loopback proxy...");
+              
+              char* verification_response = dittorProxy(8081, validation_payload);
+
+              if (verification_response != NULL) {
+                  if (strcmp(verification_response, "VALID") == 0) {
+                      log_notice(LD_DIR, "[Tor-Dittor] Token bundle verified successfully!");
+                  } else {
+                      log_warn(LD_DIR, "[Tor-Dittor] Cryptographic validation rejected by authority backend.");
+                      tor_free(verification_response);
+                      goto err; // Reject descriptor if validation fails
+                  }
+                  tor_free(verification_response);
+              } else {
+                  log_warn(LD_DIR, "[Tor-Dittor] Loopback connection failure. Verify DAServer background thread state.");
+                  goto err;
+              }
+          }
+      } else {
+          log_warn(LD_DIR, "[Tor-Dittor] Malformed token array. Expected 6 structural arguments.");
+          goto err;
+      }
   }
 
   tok = find_by_keyword(tokens, K_ROUTER_SIGNATURE);
