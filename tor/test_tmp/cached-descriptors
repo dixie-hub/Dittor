@@ -1,0 +1,19 @@
+router testrelay 127.0.0.1 9001 0 0
+identity-ed25519
+-----BEGIN ED25519 CERT-----
+AQAFAgA0AAG2w/RKAuO8Kx6F/4R6G1u0mN2HqWfL+8b/1v8=
+-----END ED25519 CERT-----
+published 2026-06-23 20:00:00
+onion-key
+-----BEGIN RSA PUBLIC KEY-----
+MIGJAoGBAMzVvQ==
+-----END RSA PUBLIC KEY-----
+signing-key
+-----BEGIN RSA PUBLIC KEY-----
+MIGJAoGBAMzVvQ==
+-----END RSA PUBLIC KEY-----
+dittor-proof ctx_arg pk_arg nym_arg zkp_arg challenge_arg response_arg
+router-signature
+-----BEGIN SIGNATURE-----
+fAKEsiGnaTuReFAkEsigNaTuReFAkEsiGnaTuRe=
+-----END SIGNATURE-----

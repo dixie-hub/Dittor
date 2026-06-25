@@ -133,8 +133,8 @@ public class Main {
             caProtocol.init(caProps);
         }
 
-        // Setup User Node on port 8000
-        System.out.println("Starting User node on port 8000...");
+        // Setup User Node on port 8050
+        System.out.println("Starting User node on port 8050...");
         User cryptoUser = new User(pairing);
         GroupElement mpkG1 = CAs.get(0).getMasterPubKeyG1(); // master keys from DKG phase
         GroupElement mpkG2 = CAs.get(0).getMasterPubKeyG2();
@@ -143,7 +143,7 @@ public class Main {
                 g2);
         Properties userProperties = new Properties();
         userProperties.setProperty("address", localhost);
-        userProperties.setProperty("port", "8000");
+        userProperties.setProperty("port", "8050");
 
         babel.registerProtocol(userProtocol);
         userProtocol.init(userProperties);

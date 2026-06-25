@@ -18,7 +18,7 @@ char* dittorProxy(int port, const char* message) {
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(port);
 
-    if (inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, "172.23.96.1", &serverAddress.sin_addr) <= 0) {
         return NULL;
     }
 
