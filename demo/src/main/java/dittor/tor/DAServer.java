@@ -32,7 +32,7 @@ public class DAServer implements Runnable {
 
     @Override
     public void run() {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
+        try (ServerSocket serverSocket = new ServerSocket(port, 0, java.net.InetAddress.getByName("0.0.0.0"))) {
             System.out.println("[DA-Server] Listening for Tor connection on port " + port);
 
             while (true) {
