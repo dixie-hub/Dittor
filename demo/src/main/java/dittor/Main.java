@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.cryptimeleon.math.serialization.converter.JSONConverter;
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 import org.cryptimeleon.math.structures.groups.elliptic.type3.bn.BarretoNaehrigBilinearGroup;
@@ -16,7 +17,9 @@ import dittor.crypto.CA;
 import dittor.crypto.DA;
 import dittor.crypto.User;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
+import dittor.crypto.vrf.Proof;
 import dittor.crypto.vrf.SchnorrZKP;
+import dittor.crypto.vrf.VRFResult;
 import dittor.protocols.CAProtocol;
 import dittor.protocols.DAProtocol;
 import dittor.protocols.UserProtocol;
@@ -169,6 +172,28 @@ public class Main {
         // ---------------------------------------------------------
         System.out.println("Triggering User Protocol to begin network handshake...");
         userProtocol.startRegistration(caNetworkMap, daHost);
+
+        Thread.sleep(2500); //to make sure the protocol async tasks are complete
+        try {
+            JSONConverter jsonConverter = new JSONConverter();
+
+            String context = "TorRelayConsensus2026";
+
+            GroupElement userPubKey = cryptoUser.getPublicKeyG2();
+            VRFResult vrfResult = cryptoUser.generateVRFPseudonym(vrf, context);
+            Proof identityZKP = cryptoUser.generateSchnorrPoK(schnorr, context);
+
+            String realPkJSON = jsonConverter.serialize(userPubKey.getRepresentation());
+            String realNymJSON = jsonConverter.serialize(vrfResult.getRepresentation());
+            String realZkpJSON = jsonConverter.serialize(identityZKP.getRepresentation());
+
+            System.out.println("\n=======================================");
+            System.out.println("[DITTOR CONFIG] dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " " + realZkpJSON + " mock_chal mock_resp");
+            System.out.println("=======================================\n");
+        } catch (Exception e) {
+            System.out.println("[DITTOR CONFIG] Error compiling tokens: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
 }

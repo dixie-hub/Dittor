@@ -3,6 +3,9 @@ Authority = Node(tag="a", authority=1, relay=1, torrc="authority.tmpl")
 ExitRelay = Node(tag="r", relay=1, exit=1, torrc="relay.tmpl")
 Client = Node(tag="c", client=1, torrc="client.tmpl")
 
+# Dittor
+options dittor-proof mock_ctx {"__type":"OBJ","x":[["INT:10761a3807e0867c6fb6e9fcc032d8d971a79d77ef5e5d2070d4958cd405915bd3"],["INT:1dffe4ad333ea975a536e56ff39907baf4ebb1b4fd9d5a935e5a6351d7db6f41906"]],"y":[["INT:c3637ac24a272a3b7ed3578e55c820560fefcea083723b2d469c18bd4942a8b9"],["INT:1ab1ad27491587ff37444654d5dd34651f9d7918183578dbf1b18113e4849cca56c"]],"z":[["INT:1"]]} {"__type":"OBJ","x":["INT:16911ce800cbcda83ba1b04b61d672e62b9f6ba3b22c94a3a9c420986ca8f9b366c"],"y":["INT:1"],"z":["INT:1"]} {"__type":"OBJ","x":[["INT:23e68e03f892406d39cdacb9161c168ab12ebf37b85d2f564dd73547dde942d977a"],["INT:13bb5160652bfe4315297a24722e42dca7f317d45e538146d5624c85e01420a4e10"]],"y":[["INT:145b48342491ba43eb54c5458317655f2f278e9d1d2347dd355c1aac08195f1da91"],["INT:17f27b177c7c97da637a440f0a5243198dda1870c28353d200b74fbfa41894f9d99"]],"z":[["INT:1"]]} mock_chal mock_resp
+
 # Since only 25% of relays get the guard flag,
 # TestingDirAuthVoteGuard * may need to be used in small networks
 
