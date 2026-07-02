@@ -3214,6 +3214,27 @@ router_dump_router_to_string(routerinfo_t *router,
     }
   }
 
+  // DITTOR INJECTION START
+  FILE *proof_file = fopen("dittor_proof.txt", "r");
+  if (proof_file != NULL) {
+    char proof_buf[16384];
+    
+    if (fgets(proof_buf, sizeof(proof_buf), proof_file) != NULL) {
+      int len = strlen(proof_buf);
+      if (len > 0 && proof_buf[len-1] != '\n') {
+        strncat(proof_buf, "\n", sizeof(proof_buf) - len - 1);
+      }
+      
+      log_notice(LD_DIR, "[Tor-Dittor] Successfully injected local dittor_proof.txt into descriptor!");
+      
+      smartlist_add_strdup(chunks, proof_buf);
+    }
+    fclose(proof_file);
+  } else {
+    log_info(LD_DIR, "[Tor-Dittor] No local dittor_proof.txt found. Building normal descriptor.");
+  }
+  // DITTOR INJECTION END
+
   /* Sign the descriptor with Ed25519 */
   if (emit_ed_sigs)  {
     smartlist_add_strdup(chunks, "router-sig-ed25519 ");

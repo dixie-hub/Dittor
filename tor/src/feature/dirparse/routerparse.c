@@ -946,59 +946,49 @@ router_parse_entry_from_string(const char *s, const char *end, int cache_copy,
   // DITTOR START
   tok = find_opt_by_keyword(tokens, K_OPT_DITTOR_PROOF);
 
-  char validation_payload[8192];
+  char validation_payload[16384]; 
   int is_mock = 0;
 
-  // 1. Only run this if we are explicitly looking at your custom token keyword!
-  if (tok->tp == K_OPT_DITTOR_PROOF) { 
+  if (tok != NULL) { 
     if (tok->n_args >= 6 && tok->args[0] != NULL && strcmp(tok->args[0], "TorRelayConsensus2026") == 0) {
-      // A real valid custom cryptographic descriptor line!
       snprintf(validation_payload, sizeof(validation_payload), 
               "VALIDATE %s|%s|%s|%s|%s|%s\n",
               tok->args[0], tok->args[1], tok->args[2], tok->args[3], tok->args[4], tok->args[5]);
               
-      strncpy(last_seen_valid_dittor_proof, validation_payload, sizeof(last_seen_valid_dittor_proof) - 1);
-      is_mock = 0;
+      snprintf(last_seen_valid_dittor_proof, sizeof(last_seen_valid_dittor_proof), "%s", validation_payload);      is_mock = 0;
     } else {
       // Fallback logic for mock descriptors
       if (strlen(last_seen_valid_dittor_proof) > 0) {
-        strncpy(validation_payload, last_seen_valid_dittor_proof, sizeof(validation_payload) - 1);
+        snprintf(validation_payload, sizeof(validation_payload), "%s", last_seen_valid_dittor_proof);
       } else {
         snprintf(validation_payload, sizeof(validation_payload), 
                 "VALIDATE TorRelayConsensus2026|EMPTY|EMPTY|EMPTY|EMPTY|EMPTY\n");
       }
       is_mock = 1;
     }
-  } else {
-    // If it's a normal Tor token line (onion-key, platform, etc.), DO NOT INTERFEPENE!
-    // Let Tor process it normally.
-  }
 
-  log_notice(LD_DIR,
-             "[Tor-Dittor] Passing %s descriptor payload to loopback proxy...",
-             is_mock ? "mock" : "real");
+    log_notice(LD_DIR,
+               "[Tor-Dittor] Passing %s descriptor payload to loopback proxy...",
+               is_mock ? "mock" : "real");
 
-  char *verification_response = dittorProxy(8081, validation_payload);
+    char *verification_response = dittorProxy(8081, validation_payload);
 
-  if (verification_response != NULL) {
-    tor_strstrip(verification_response, "\r\n ");
-    if (strcmp(verification_response, "VALID") == 0 ||
-        strcmp(verification_response,
-               "Added to Tor relay consensus directory.") == 0) {
-      log_notice(LD_DIR, "[Tor-Dittor] Verification SUCCESS for '%s'!",
-                 router->nickname ? router->nickname : "unknown");
+    if (verification_response != NULL) {
+      tor_strstrip(verification_response, "\r\n ");
+      if (strcmp(verification_response, "VALID") == 0 ||
+          strcmp(verification_response, "Added to Tor relay consensus directory.") == 0) {
+        log_notice(LD_DIR, "[Tor-Dittor] Verification SUCCESS for '%s'!",
+                   router->nickname ? router->nickname : "unknown");
+      } else {
+        log_warn(LD_DIR,
+                 "[Tor-Dittor] Verification REJECTED by backend for '%s'. Response: %s",
+                 router->nickname ? router->nickname : "unknown",
+                 verification_response);
+      }
+      tor_free(verification_response); 
     } else {
-      log_warn(LD_DIR,
-               "[Tor-Dittor] Verification REJECTED by backend for '%s'. "
-               "Response: %s",
-               router->nickname ? router->nickname : "unknown",
-               verification_response);
-      tor_free(verification_response);
+      log_warn(LD_DIR, "[Tor-Dittor] Loopback connection to port 8081 failed. Keeping node alive.");
     }
-    tor_free(verification_response);
-  } else {
-    log_warn(LD_DIR, "[Tor-Dittor] Loopback connection to port 8081 failed. "
-                     "Keeping node alive.");
   }
   // DITTOR END
 

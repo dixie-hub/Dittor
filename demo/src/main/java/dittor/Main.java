@@ -1,5 +1,6 @@
 package dittor;
 
+import java.io.FileWriter;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -190,9 +191,15 @@ public class Main {
             String realProofChallengeString = jsonConverter.serialize(identityZKP.getChallenge().getRepresentation());
             String realProofResponseString = jsonConverter.serialize(identityZKP.getResponse().getRepresentation());
 
+            String dittorProofString = "dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " " + realVrfZkpJSON + " " + realProofChallengeString + " " + realProofResponseString;
             System.out.println("\n=======================================");
-            System.out.println("[DITTOR CONFIG] dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " " + realVrfZkpJSON + " " + realProofChallengeString + " " + realProofResponseString);
+            System.out.println("[DITTOR CONFIG] " + dittorProofString);
             System.out.println("=======================================\n");
+        
+            FileWriter writer = new FileWriter("/home/diogo/chutney/net/nodes/000a/dittor_proof.txt");
+            writer.write(dittorProofString);
+            writer.close();
+            System.out.println("Successfully exported proof to Chutney node 000a!");
         } catch (Exception e) {
             System.out.println("[DITTOR CONFIG] Error compiling tokens: " + e.getMessage());
             e.printStackTrace();
