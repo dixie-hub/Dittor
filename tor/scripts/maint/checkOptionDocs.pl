@@ -7,7 +7,7 @@ my %torrcSampleOptions = ();
 my %manPageOptions = ();
 
 # Load the canonical list as actually accepted by Tor.
-open(F, "/mnt/c/Users/donun/OneDrive/Ambiente de Trabalho/uni/5 ano/Tese/SASSIEmulation/Dittor/tor/src/app/tor --list-torrc-options |") or die;
+open(F, "/mnt/e/uni/5 ano/2 sem/Tese/Dittor/tor/src/app/tor --list-torrc-options |") or die;
 while (<F>) {
     next if m!\[notice\] Tor v0\.!;
     if (m!^([A-Za-z0-9_]+)!) {
@@ -34,12 +34,12 @@ sub loadTorrc {
     0;
 }
 
-loadTorrc("/mnt/c/Users/donun/OneDrive/Ambiente de Trabalho/uni/5 ano/Tese/SASSIEmulation/Dittor/tor/src/config/torrc.sample.in", \%torrcSampleOptions);
+loadTorrc("/mnt/e/uni/5 ano/2 sem/Tese/Dittor/tor/src/config/torrc.sample.in", \%torrcSampleOptions);
 
 # Try to figure out what's in the man page.
 
 my $considerNextLine = 0;
-open(F, "/mnt/c/Users/donun/OneDrive/Ambiente de Trabalho/uni/5 ano/Tese/SASSIEmulation/Dittor/tor/doc/man/tor.1.txt") or die;
+open(F, "/mnt/e/uni/5 ano/2 sem/Tese/Dittor/tor/doc/man/tor.1.txt") or die;
 while (<F>) {
     if (m!^(?:\[\[([A-za-z0-9_]+)\]\] *)?\*\*([A-Za-z0-9_]+)\*\*! && $considerNextLine) {
         $manPageOptions{$2} = 1;

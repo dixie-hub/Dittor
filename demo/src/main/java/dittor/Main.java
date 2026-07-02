@@ -184,11 +184,14 @@ public class Main {
             Proof identityZKP = cryptoUser.generateSchnorrPoK(schnorr, context);
 
             String realPkJSON = jsonConverter.serialize(userPubKey.getRepresentation());
-            String realNymJSON = jsonConverter.serialize(vrfResult.getRepresentation());
-            String realZkpJSON = jsonConverter.serialize(identityZKP.getRepresentation());
+            String realNymJSON = jsonConverter.serialize(vrfResult.getPseudonym().getRepresentation());
+            String realVrfZkpJSON = jsonConverter.serialize(vrfResult.getZeroKnowledgeProof().getRepresentation());
+
+            String realProofChallengeString = jsonConverter.serialize(identityZKP.getChallenge().getRepresentation());
+            String realProofResponseString = jsonConverter.serialize(identityZKP.getResponse().getRepresentation());
 
             System.out.println("\n=======================================");
-            System.out.println("[DITTOR CONFIG] dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " " + realZkpJSON + " mock_chal mock_resp");
+            System.out.println("[DITTOR CONFIG] dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " " + realVrfZkpJSON + " " + realProofChallengeString + " " + realProofResponseString);
             System.out.println("=======================================\n");
         } catch (Exception e) {
             System.out.println("[DITTOR CONFIG] Error compiling tokens: " + e.getMessage());

@@ -83,6 +83,7 @@
 
 /* Prototype function statement for the Dittor socket loopback bridge */
 char *dittorProxy(int port, const char *payload);
+static char last_seen_valid_dittor_proof[16384] = "";
 
 /** List of tokens recognized in router descriptors */
 // clang-format off
@@ -948,37 +949,29 @@ router_parse_entry_from_string(const char *s, const char *end, int cache_copy,
   char validation_payload[8192];
   int is_mock = 0;
 
-  if (tok && tok->n_args >= 6) {
-    snprintf(validation_payload, sizeof(validation_payload),
-             "VALIDATE %s|%s|%s|%s|%s|%s\n", tok->args[0], tok->args[1],
-             tok->args[2], tok->args[3], tok->args[4], tok->args[5]);
-    is_mock = 0;
+  // 1. Only run this if we are explicitly looking at your custom token keyword!
+  if (tok->tp == K_OPT_DITTOR_PROOF) { 
+    if (tok->n_args >= 6 && tok->args[0] != NULL && strcmp(tok->args[0], "TorRelayConsensus2026") == 0) {
+      // A real valid custom cryptographic descriptor line!
+      snprintf(validation_payload, sizeof(validation_payload), 
+              "VALIDATE %s|%s|%s|%s|%s|%s\n",
+              tok->args[0], tok->args[1], tok->args[2], tok->args[3], tok->args[4], tok->args[5]);
+              
+      strncpy(last_seen_valid_dittor_proof, validation_payload, sizeof(last_seen_valid_dittor_proof) - 1);
+      is_mock = 0;
+    } else {
+      // Fallback logic for mock descriptors
+      if (strlen(last_seen_valid_dittor_proof) > 0) {
+        strncpy(validation_payload, last_seen_valid_dittor_proof, sizeof(validation_payload) - 1);
+      } else {
+        snprintf(validation_payload, sizeof(validation_payload), 
+                "VALIDATE TorRelayConsensus2026|EMPTY|EMPTY|EMPTY|EMPTY|EMPTY\n");
+      }
+      is_mock = 1;
+    }
   } else {
-    snprintf(validation_payload, sizeof(validation_payload),
-             "VALIDATE mock_ctx|"
-             "{\"__type\":\"OBJ\",\"x\":[[\"INT:"
-             "10761a3807e0867c6fb6e9fcc032d8d971a79d77ef5e5d2070d4958cd405915b"
-             "d3\"],[\"INT:"
-             "1dffe4ad333ea975a536e56ff39907baf4ebb1b4fd9d5a935e5a6351d7db6f41"
-             "906\"]],\"y\":[[\"INT:"
-             "c3637ac24a272a3b7ed3578e55c820560fefcea083723b2d469c18bd4942a8b9"
-             "\"],[\"INT:"
-             "1ab1ad27491587ff37444654d5dd34651f9d7918183578dbf1b18113e4849cca"
-             "56c\"]],\"z\":[[\"INT:1\"]]}|"
-             "{\"__type\":\"OBJ\",\"x\":[\"INT:"
-             "16911ce800cbcda83ba1b04b61d672e62b9f6ba3b22c94a3a9c420986ca8f9b3"
-             "66c\"],\"y\":[\"INT:1\"],\"z\":[\"INT:1\"]}|"
-             "{\"__type\":\"OBJ\",\"x\":[[\"INT:"
-             "23e68e03f892406d39cdacb9161c168ab12ebf37b85d2f564dd73547dde942d9"
-             "77a\"],[\"INT:"
-             "13bb5160652bfe4315297a24722e42dca7f317d45e538146d5624c85e01420a4"
-             "e10\"]],\"y\":[[\"INT:"
-             "145b48342491ba43eb54c5458317655f2f278e9d1d2347dd355c1aac08195f1d"
-             "a91\"],[\"INT:"
-             "17f27b177c7c97da637a440f0a5243198dda1870c28353d200b74fbfa41894f9"
-             "d99\"]],\"z\":[[\"INT:1\"]]}|"
-             "mock_chal|mock_resp\n");
-    is_mock = 0;
+    // If it's a normal Tor token line (onion-key, platform, etc.), DO NOT INTERFEPENE!
+    // Let Tor process it normally.
   }
 
   log_notice(LD_DIR,
