@@ -105,21 +105,21 @@ public class Main {
         Babel babel = Babel.getInstance();
         String localhost = InetAddress.getByName("127.0.0.1").getHostAddress();
 
-        // Setup DA on port 9000
+        // Setup DA on port 10000
         System.out.println("Starting DA node on port 9000");
         DA cryptoDA = new DA(vrf, schnorr);
         DAProtocol daProtocol = new DAProtocol(pairing, cryptoDA);
         Properties daProperties = new Properties();
         daProperties.setProperty("address", localhost);
-        daProperties.setProperty("port", "9000");
-        Host daHost = new Host(InetAddress.getByName(localhost), 9000);
+        daProperties.setProperty("port", "10000");
+        Host daHost = new Host(InetAddress.getByName(localhost), 10000);
 
         babel.registerProtocol(daProtocol);
         daProtocol.init(daProperties);
 
-        // Setup CA on ports 9001, 9002, 9003...
+        // Setup CA on ports 10001, 10002, 10003...
         Map<Host, Integer> caNetworkMap = new HashMap<>();
-        int caBasePort = 9000;
+        int caBasePort = 10000;
 
         for (int i = 0; i < n; i++) {
             int caPort = caBasePort + CAs.get(i).caID;
@@ -197,7 +197,7 @@ public class Main {
             System.out.println("[DITTOR CONFIG] " + dittorProofString);
             System.out.println("=======================================\n");
 
-            String chutneyPath = System.getenv().getOrDefault("CHUTNEY_PATH",
+            String chutneyPath = System.getenv().getOrDefault("DITTOR_PROOF_PATH",
                     "../chutney/net/nodes/000a/dittor_proof.txt");
             FileWriter writer = new FileWriter(chutneyPath);
             writer.write(dittorProofString);

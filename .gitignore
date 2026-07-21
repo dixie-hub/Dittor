@@ -14,4 +14,6 @@ Makefile
 Makefile.in
 
 demo/target/
+/tmp/dittor_chutney/
 *.class
+dittor_proof.txt

@@ -26,9 +26,7 @@ public class SchnorrZKP {
 
         Zn.ZnElement response = blindingFactor.add(challenge.mul(secretX));
 
-        Proof proof = new Proof(challenge, response);
-
-        return proof;
+        return new Proof(challenge, response);
     }
 
     public boolean verifyProof(GroupElement userPubKeyG2, String context, Proof proof) {
@@ -43,8 +41,12 @@ public class SchnorrZKP {
     private Zn.ZnElement hashChallenge(GroupElement pk, GroupElement commitment, String context) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String dataToHash = pk.toString() + commitment.toString() + context;
-            byte[] hashBytes = digest.digest(dataToHash.getBytes(StandardCharsets.UTF_8));
+            
+            digest.update(pk.getUniqueByteRepresentation());
+            digest.update(commitment.getUniqueByteRepresentation());
+            digest.update(context.getBytes(StandardCharsets.UTF_8));
+            
+            byte[] hashBytes = digest.digest();
             BigInteger val = new BigInteger(1, hashBytes);
             return zp.valueOf(val);
         } catch (Exception e) {

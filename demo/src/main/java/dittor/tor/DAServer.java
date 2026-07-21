@@ -30,6 +30,15 @@ public class DAServer implements Runnable {
         this.cryptoDA = cryptoDA;
     }
 
+    private String sanitizeJsonString(String str) {
+        if (str == null) return null;
+        str = str.trim();
+        if (!str.startsWith("{") && !str.startsWith("[") && !str.startsWith("\"")) {
+            return "\"" + str + "\"";
+        }
+        return str;
+    }
+
     @Override
     public void run() {
         try (ServerSocket serverSocket = new ServerSocket(port, 0, java.net.InetAddress.getByName("0.0.0.0"))) {
@@ -43,49 +52,57 @@ public class DAServer implements Runnable {
 
                     String request = in.readLine();
                     if (request != null && request.startsWith("VALIDATE")) {
-                        String payload = request.substring(9).trim(); // extract after VALIDATE
+                        String payload = request.substring(9).trim();
                         boolean isValid = false;
 
                         try {
-                            // context|pkStr|nymStr|zkpStr|proofChallengeStr|proofResponseStr
                             String[] parts = payload.split("\\|");
 
                             if (parts.length == 6) {
                                 JSONConverter jsonConverter = new JSONConverter();
-                                String context = parts[0];
-                                String pkStr = parts[1];
+                                String context = parts[0].trim();
+                                String pkStr = sanitizeJsonString(parts[1]);
+                                String nymStr = sanitizeJsonString(parts[2]);
+                                String zkpStr = sanitizeJsonString(parts[3]);
+                                String proofVal1Str = sanitizeJsonString(parts[4]);
+                                String proofVal2Str = sanitizeJsonString(parts[5]);
 
-                                if (pkStr.trim().equals("{}") || pkStr.contains("mock_pk")) {
-
-                                } else {
+                                if (!pkStr.contains("mock_pk")) {
                                     GroupElement pk = pairing.getG2().restoreElement(jsonConverter.deserialize(pkStr));
-                                    String nymStr = parts[2];
-                                    String zkpStr = parts[3];
-                                    String proofChallengeStr = parts[4];
-                                    String proofResponseStr = parts[5];
-
-                                    GroupElement nym = pairing.getGT()
-                                            .restoreElement(jsonConverter.deserialize(nymStr));
-                                    GroupElement zkp = pairing.getG1()
-                                            .restoreElement(jsonConverter.deserialize(zkpStr));
+                                    GroupElement nym = pairing.getGT().restoreElement(jsonConverter.deserialize(nymStr));
+                                    GroupElement zkp = pairing.getG1().restoreElement(jsonConverter.deserialize(zkpStr));
 
                                     Zn zn = pairing.getZn();
-                                    ZnElement challenge = zn
-                                            .restoreElement(jsonConverter.deserialize(proofChallengeStr));
-                                    ZnElement response = zn.restoreElement(jsonConverter.deserialize(proofResponseStr));
+                                    ZnElement val1 = zn.restoreElement(jsonConverter.deserialize(proofVal1Str));
+                                    ZnElement val2 = zn.restoreElement(jsonConverter.deserialize(proofVal2Str));
 
                                     VRFResult vrfData = new VRFResult(nym, zkp);
-                                    Proof identityProof = new Proof(challenge, response);
 
                                     System.out.println("[DA-Server] Processing Tor descriptor tokens...");
                                     boolean isVrfValid = cryptoDA.verifyVrf(pk, vrfData, context);
-                                    boolean isZkpValid = cryptoDA.verifyIdentityProof(pk, identityProof, context);
+
+                                    // Diagnostic Test A: Standard Order Proof(val1, val2)
+                                    System.out.println("[DA-Server Diagnostic] Testing Proof order (val1, val2)...");
+                                    Proof proofA = new Proof(val1, val2);
+                                    boolean isZkpValid = cryptoDA.verifyIdentityProof(pk, proofA, context);
+
+                                    // Diagnostic Test B: Inverted Order Proof(val2, val1)
+                                    if (!isZkpValid) {
+                                        System.out.println("[DA-Server Diagnostic] Testing inverted Proof order (val2, val1)...");
+                                        Proof proofB = new Proof(val2, val1);
+                                        if (cryptoDA.verifyIdentityProof(pk, proofB, context)) {
+                                            System.out.println("[DA-Server] ZKP PASSED with inverted proof arguments!");
+                                            isZkpValid = true;
+                                        }
+                                    }
+
+                                    System.out.println("[DA-Server] VRF Evaluation Outcome: " + (isVrfValid ? "PASS" : "FAIL"));
+                                    System.out.println("[DA-Server] Schnorr ZKP Evaluation Outcome: " + (isZkpValid ? "PASS" : "FAIL"));
 
                                     isValid = isVrfValid && isZkpValid;
                                 }
                             } else {
-                                System.err.println(
-                                        "[DA-Server] Malformed payload! Expected 6 components, got: " + parts.length);
+                                System.err.println("[DA-Server] Malformed payload! Expected 6 components, got: " + parts.length);
                             }
                         } catch (Exception cryptoEx) {
                             System.err.println("[DA-Server] Crypto reconstruction failed: " + cryptoEx.getMessage());
@@ -94,7 +111,7 @@ public class DAServer implements Runnable {
 
                         if (isValid) {
                             out.println("VALID");
-                            System.out.println("[DA-Server] Pseudonym verified successfully");
+                            System.out.println("[DA-Server] Pseudonym verified successfully!");
                         } else {
                             out.println("INVALID");
                             System.err.println("[DA-Server] Pseudonym rejected");

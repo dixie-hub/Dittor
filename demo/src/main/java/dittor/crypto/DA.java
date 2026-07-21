@@ -8,11 +8,8 @@ import dittor.crypto.vrf.SchnorrZKP;
 import dittor.crypto.vrf.VRFResult;
 
 /* Classe para as Directory Authorities do Tor
-
-Responsaveis por:
-- Validar pseudonimos que os utilizadores enviam
+ * Responsáveis por: Validar pseudónimos que os utilizadores enviam
  */
-
 public class DA {
 
     private final DodisYampolskiyVRF dodisYampolskiy;
@@ -45,8 +42,8 @@ public class DA {
             return isValid;
         } catch (Exception e) {
             System.err.println("[DA-Crypto] Schnorr ZKP validation failed: " + e.getMessage());
+            e.printStackTrace();
             return false;
         }
     }
-
 }
