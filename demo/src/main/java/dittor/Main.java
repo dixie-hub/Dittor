@@ -174,7 +174,7 @@ public class Main {
         System.out.println("Triggering User Protocol to begin network handshake...");
         userProtocol.startRegistration(caNetworkMap, daHost);
 
-        Thread.sleep(2500); //to make sure the protocol async tasks are complete
+        Thread.sleep(2500); // to make sure the protocol async tasks are complete
         try {
             JSONConverter jsonConverter = new JSONConverter();
 
@@ -191,12 +191,15 @@ public class Main {
             String realProofChallengeString = jsonConverter.serialize(identityZKP.getChallenge().getRepresentation());
             String realProofResponseString = jsonConverter.serialize(identityZKP.getResponse().getRepresentation());
 
-            String dittorProofString = "dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " " + realVrfZkpJSON + " " + realProofChallengeString + " " + realProofResponseString;
+            String dittorProofString = "dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " "
+                    + realVrfZkpJSON + " " + realProofChallengeString + " " + realProofResponseString;
             System.out.println("\n=======================================");
             System.out.println("[DITTOR CONFIG] " + dittorProofString);
             System.out.println("=======================================\n");
-        
-            FileWriter writer = new FileWriter("/home/diogo/chutney/net/nodes/000a/dittor_proof.txt");
+
+            String chutneyPath = System.getenv().getOrDefault("CHUTNEY_PATH",
+                    "../chutney/net/nodes/000a/dittor_proof.txt");
+            FileWriter writer = new FileWriter(chutneyPath);
             writer.write(dittorProofString);
             writer.close();
             System.out.println("Successfully exported proof to Chutney node 000a!");

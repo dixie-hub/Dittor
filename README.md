@@ -37,3 +37,20 @@ src/main/java/
     └── utils/
         └── CryptimeleonSetup.java       // Centralized BilinearGroup initialization
 
+To start running:
+
+I reccomend you run this in your Linux home filesystem, or your WSL mount:
+cd ~
+git clone <your-repo-url>
+
+cd "/mnt/c/Users/donun/OneDrive/Ambiente de Trabalho/uni/5 ano/Tese/SASSIEmulation/Dittor/chutney"
+
+export CHUTNEY_TOR="/mnt/c/Users/donun/OneDrive/Ambiente de Trabalho/uni/5 ano/Tese/SASSIEmulation/Dittor/tor/src/app/tor"
+export CHUTNEY_TOR_GENCERT="/mnt/c/Users/donun/OneDrive/Ambiente de Trabalho/uni/5 ano/Tese/SASSIEmulation/Dittor/tor/src/tools/tor-gencert"
+
+1 - Make the tor directory (this will take a while)
+2 - Open two terminals, one for the Dittor Java system, another for Chutney
+Dittor:
+    cd demo
+    mvn exec:java -Dexec.mainClass="dittor.Main" -Djava.net.preferIPv4Stack=true
+Chutney:
