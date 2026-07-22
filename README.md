@@ -52,3 +52,7 @@ To run:
 
 If does not work, try this first, and then try again:
     chmod +x start.sh
+
+If this still does not work and you are using a version of python like 3.13 or higher, try downloading this missing backports:
+    pip install pyasynchat --break-system-packages
+    pip install pyasyncore legacy-cgi --break-system-packages

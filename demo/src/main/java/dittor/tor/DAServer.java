@@ -81,14 +81,10 @@ public class DAServer implements Runnable {
                                     System.out.println("[DA-Server] Processing Tor descriptor tokens...");
                                     boolean isVrfValid = cryptoDA.verifyVrf(pk, vrfData, context);
 
-                                    // Diagnostic Test A: Standard Order Proof(val1, val2)
-                                    System.out.println("[DA-Server Diagnostic] Testing Proof order (val1, val2)...");
                                     Proof proofA = new Proof(val1, val2);
                                     boolean isZkpValid = cryptoDA.verifyIdentityProof(pk, proofA, context);
 
-                                    // Diagnostic Test B: Inverted Order Proof(val2, val1)
                                     if (!isZkpValid) {
-                                        System.out.println("[DA-Server Diagnostic] Testing inverted Proof order (val2, val1)...");
                                         Proof proofB = new Proof(val2, val1);
                                         if (cryptoDA.verifyIdentityProof(pk, proofB, context)) {
                                             System.out.println("[DA-Server] ZKP PASSED with inverted proof arguments!");
