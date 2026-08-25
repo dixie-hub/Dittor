@@ -4,8 +4,10 @@ import java.io.FileWriter;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Properties;
 
 import org.cryptimeleon.math.serialization.converter.JSONConverter;
@@ -67,28 +69,74 @@ public class Main {
         for (CA ca : CAs)
             ca.generatePrivatePolynomial(t);
 
-        // CAs broadcast public keys to each other
+        // Fase 1 da adaptação de Gennaro, cálculo dos compromissos de Pedersen
+        // localmente e publicação do hash
+        for (CA ca : CAs)
+            ca.computeCommitments(g1, h1, g2);
+
+        Map<Integer, String> publishedHashes = new HashMap<>();
+        for (CA ca : CAs)
+            publishedHashes.put(ca.caID, ca.getCommitmentHash());
+
+        System.out.println("All " + n + " CAs published their commitment hashes. Next, the reveal phase...");
+
+        // Fase 2 da adaptação de Gennaro, revelação dos compromissos reais e
+        // desqualificação
+        List<CA> qualifiedCAs = new ArrayList<>();
+        for (CA ca : CAs) {
+            String recomputedHash = CA.hashCommitments(ca.getRevealedCommitments(), ca.getRevealedPubKeyG1(),
+                    ca.getRevealedPubKeyG2());
+            if (!recomputedHash.equals(publishedHashes.get(ca.caID))) {
+                System.out.println("CA-" + ca.caID + " DISQUALIFIED: revealed commitments don't match their hash.");
+                ca.disqualify();
+            } else
+                qualifiedCAs.add(ca);
+        }
+
+        // CAs enviam as avaliações dos polinómios s_ij e t_ij entre si e cada recetor
+        // verifica a share contra os compromissosa revelados do emissor antes de a
+        // aceitar
+        Map<Integer, Map<Integer, Zn.ZnElement>> secretSharesByRecipient = new HashMap<>();
+        Set<Integer> disqualifiedSenderIds = new HashSet<>();
+
+        for (CA recipientCA : qualifiedCAs) {
+            Map<Integer, Zn.ZnElement> received = new HashMap<>();
+            for (CA senderCA : qualifiedCAs) {
+                Zn.ZnElement s_ij = senderCA.evaluateSecretPolynomial(recipientCA.caID);
+                Zn.ZnElement t_ij = senderCA.evaluateBlindingPolynomial(recipientCA.caID);
+
+                boolean shareValid = CA.verifyShare(s_ij, t_ij, senderCA.getRevealedCommitments(), recipientCA.caID, g1,
+                        h1, pairing.getZn());
+                if (!shareValid) {
+                    System.out.println("CA-" + senderCA.caID + " DISQUALIFIED: share sent to CA-" + recipientCA.caID + " failed verification.");
+                    disqualifiedSenderIds.add(senderCA.caID);
+                    continue;
+                }
+                received.put(senderCA.caID, s_ij);
+            }
+            secretSharesByRecipient.put(recipientCA.caID, received);
+        }
+
+        qualifiedCAs.removeIf(ca -> disqualifiedSenderIds.contains(ca.caID));
+        if (qualifiedCAs.size() < t) {
+            throw new IllegalStateException("DKG failed: less than " + t + " qualified CAs remain after disqualifications.");
+        }
+
         List<GroupElement> pkG1s = new ArrayList<>();
         List<GroupElement> pkG2s = new ArrayList<>();
-        for (CA ca : CAs) {
-            pkG1s.add(ca.getPublicKey(h1));
-            pkG2s.add(ca.getPublicKey(g2));
+        for (CA ca : qualifiedCAs) {
+            pkG1s.add(ca.getRevealedPubKeyG1());
+            pkG2s.add(ca.getRevealedPubKeyG2());
         }
 
-        // CAs send polynomial evaluations to each other
-        // ex. CA 1 receives f1(1) from itself, f2(1) from CA 2, and f3(1) from CA 3
-        // synchronized broadcast exchange
-        List<List<Zn.ZnElement>> allCollectedShares = new ArrayList<>();
-        for (CA recipientCA : CAs) {
-            List<Zn.ZnElement> sharesForThisCA = new ArrayList<>();
-            for (CA senderCA : CAs) {
-                sharesForThisCA.add(senderCA.evaluatePolynomial(recipientCA.caID));
+        for (CA ca : qualifiedCAs) {
+            List<Zn.ZnElement> shares = new ArrayList<>();
+            for (Map.Entry<Integer, Zn.ZnElement> entry : secretSharesByRecipient.get(ca.caID).entrySet()) {
+                if (!disqualifiedSenderIds.contains(entry.getKey()))
+                    shares.add(entry.getValue());
             }
-            allCollectedShares.add(sharesForThisCA);
+            ca.finalizeDKG(shares, pkG1s, pkG2s); 
         }
-
-        for (int i = 0; i < n; i++)
-            CAs.get(i).finalizeDKG(allCollectedShares.get(i), pkG1s, pkG2s);
 
         System.out.println("DKG Complete. Master keys established.");
 
@@ -142,8 +190,8 @@ public class Main {
         // Setup User Node on port 8050
         System.out.println("Starting User node on port 8050...");
         User cryptoUser = new User(pairing);
-        GroupElement mpkG1 = CAs.get(0).getMasterPubKeyG1(); // master keys from DKG phase
-        GroupElement mpkG2 = CAs.get(0).getMasterPubKeyG2();
+        GroupElement mpkG1 = qualifiedCAs.get(0).getMasterPubKeyG1(); // master keys from DKG phase
+        GroupElement mpkG2 = qualifiedCAs.get(0).getMasterPubKeyG2();
 
         UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, g1, h1, mpkG1, mpkG2, g1,
                 g2);

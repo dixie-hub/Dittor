@@ -1,8 +1,11 @@
 package dittor.crypto;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.cryptimeleon.math.serialization.converter.JSONConverter;
 /*Classe para as Certificate Authorities que vão comunicar entre si para produzirem uma assinatura por cima de um atributo de um user 
 
 Responsabilidades:
@@ -11,9 +14,7 @@ Responsabilidades:
 - Guardar memória dos users
 - Threshold issuance
 
-Setup:
-- gera(chavepriv, chavepub), para comunicar com outras CAs e com os users
-- envia chavepub para todos (Diffie-Hellman?)
+DKG: Pedersen VSS com a correção de Gennaro et al. (hash-then-reveal + verificação de shares)
 */
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
@@ -23,11 +24,17 @@ public class CA {
     public int caID;
     private Zn zp;
 
-    /* // atributos secretos da polinomial usada, neste caso uma reta
-    // (f_i(x) = a1 * x + a0)
-    private Zn.ZnElement a0; // interceção com o eixo do y, f(0)
-    private Zn.ZnElement a1; // declive da polinomial usada pela CA */
-    private List<Zn.ZnElement> coefficients;
+    // f_i(x) = secretCoefficients[0] + secretCoefficients[1]*x + ... (polinómio do segredo)
+    private List<Zn.ZnElement> secretCoefficients;
+    // f'_i(x), polinómio de blinding do Pedersen VSS, mesmo grau de f_i 
+    private List<Zn.ZnElement> blindingCoefficients;
+
+    // C_{i,k} = g1^{a_k} * h1^{b_k}. k = 0...t-1, só conhecidos localmente até revealCommitments()
+    private List<GroupElement> commitmentsG1;
+    private GroupElement plainPubKeyG1; // h1^{a_0}
+    private GroupElement plainPubKeyG2; // g2^{a_0}
+
+    private boolean disqualified = false;
 
     // chaves depois de DKG
     private Zn.ZnElement secretKeyShare; // share for the master key
@@ -40,16 +47,72 @@ public class CA {
     }
 
     public void generatePrivatePolynomial(int threshold) {
-        coefficients = new ArrayList<>();
+        secretCoefficients = new ArrayList<>();
+        blindingCoefficients = new ArrayList<>();
         for (int i = 0; i < threshold; i++) {
-            coefficients.add(zp.getUniformlyRandomElement());
+            secretCoefficients.add(zp.getUniformlyRandomElement());
+            blindingCoefficients.add(zp.getUniformlyRandomElement());
         }
     }
 
-    // f(x) = a0 + a1*x + a2*(x^2) + ... + a_{t-1}*(x^{t-1})
-    public Zn.ZnElement evaluatePolynomial(int recipientCaID) {
+    // Fase 1 da solução de Gennaro et al. - cálculo dos compromissos de Pedersen localmente, sem os publicar
+    public void computeCommitments(GroupElement g1, GroupElement h1, GroupElement g2) {
+        commitmentsG1 = new ArrayList<>();
+        for (int k = 0; k < secretCoefficients.size(); k++) {
+            GroupElement c = g1.pow(secretCoefficients.get(k)).op(h1.pow(blindingCoefficients.get(k))).compute();
+            commitmentsG1.add(c);
+        }
+        plainPubKeyG1 = h1.pow(secretCoefficients.get(0)).compute();
+        plainPubKeyG2 = g2.pow(secretCoefficients.get(0)).compute();
+    }
+
+    // Primeira publicação da solução de Gennaro et al., sem os compromissos, só o hash
+    public String getCommitmentHash() {
+        return hashCommitments(commitmentsG1, plainPubKeyG1, plainPubKeyG2);
+    }
+
+    // Segunda publicação, depois de todos os hashes serem divulgados
+    public List<GroupElement> getRevealedCommitments() {
+        return commitmentsG1;
+    }
+
+    public GroupElement getRevealedPubKeyG1() {
+        return plainPubKeyG1;
+    }
+
+    public GroupElement getRevealedPubKeyG2() {
+        return plainPubKeyG2;
+    }
+
+    public static String hashCommitments(List<GroupElement> commitments, GroupElement pubKeyG1, GroupElement pubKeyG2) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            JSONConverter jsonConverter = new JSONConverter();
+            for (GroupElement c : commitments) {
+                digest.update(jsonConverter.serialize(c.getRepresentation()).getBytes(StandardCharsets.UTF_8));
+            }
+            digest.update(jsonConverter.serialize(pubKeyG1.getRepresentation()).getBytes(StandardCharsets.UTF_8));
+            digest.update(jsonConverter.serialize(pubKeyG2.getRepresentation()).getBytes(StandardCharsets.UTF_8));
+            byte[] hashBytes = digest.digest();
+            StringBuilder builder = new StringBuilder();
+            for (byte b : hashBytes) builder.append(String.format("%02x", b));
+            return builder.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("ERROR: Failed to hash DKG commitments!", e);
+        }
+    }
+
+    public Zn.ZnElement evaluateSecretPolynomial(int recipientCaID) {
+        return evaluatePolynomial(secretCoefficients, recipientCaID);
+    }
+
+    public Zn.ZnElement evaluateBlindingPolynomial(int recipientCaID) {
+        return evaluatePolynomial(blindingCoefficients, recipientCaID);
+    }
+
+    private Zn.ZnElement evaluatePolynomial(List<Zn.ZnElement> coefficients, int recipientCaID) {
         Zn.ZnElement result = zp.getZeroElement(); 
-        Zn.ZnElement xPower = zp.getOneElement(); // x^i, so x^1 = x
+        Zn.ZnElement xPower = zp.getOneElement();
         Zn.ZnElement x = zp.valueOf(recipientCaID);
 
         for (Zn.ZnElement coefficient : coefficients) {
@@ -59,8 +122,25 @@ public class CA {
         return result;
     }
 
-    public GroupElement getPublicKey(GroupElement basePoint) {
-        return basePoint.pow(coefficients.get(0)).compute();
+    // Verificação do share: g1^(s_ij) * h1^(t_ij) == n_k C_(i,k)^(myID^k)
+    public static boolean verifyShare(Zn.ZnElement s_ij, Zn.ZnElement t_ij, List<GroupElement> senderCommitments, int myID, GroupElement g1, GroupElement h1, Zn zp) {
+        GroupElement leftHandSide = g1.pow(s_ij).op(h1.pow(t_ij)).compute();
+        GroupElement rightHandSide = senderCommitments.get(0).getStructure().getNeutralElement();
+        Zn.ZnElement xPower = zp.getOneElement();
+        Zn.ZnElement x = zp.valueOf(myID);
+        for (GroupElement c : senderCommitments) {
+            rightHandSide = rightHandSide.op(c.pow(xPower)).compute();
+            xPower = xPower.mul(x);
+        }
+        return leftHandSide.equals(rightHandSide);
+    }
+
+    public void disqualify() {
+        this.disqualified = true;
+    }
+
+    public boolean isDisqualified() {
+        return disqualified;
     }
 
     public void finalizeDKG(List<Zn.ZnElement> receivedShares, List<GroupElement> pkG1s, List<GroupElement> pkG2s) {
@@ -82,7 +162,8 @@ public class CA {
         }
 
         // clean up de atributos sensíveis
-        this.coefficients = null;
+        this.secretCoefficients = null;
+        this.blindingCoefficients = null;
     }
 
     public GroupElement issueSignatureShare(GroupElement blindedCommit) {
