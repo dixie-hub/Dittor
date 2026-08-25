@@ -43,6 +43,11 @@
       <version>4.0.0</version>
     </dependency>
     <dependency>
+      <groupId>org.cryptimeleon</groupId>
+      <artifactId>mclwrap</artifactId>
+      <version>3.2.0</version>
+    </dependency>
+    <dependency>
       <groupId>pt.unl.fct.di.novasys.babel</groupId>
       <artifactId>babel-core</artifactId>
       <version>1.0.5</version>

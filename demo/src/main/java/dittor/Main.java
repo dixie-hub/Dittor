@@ -11,7 +11,8 @@ import java.util.Properties;
 import org.cryptimeleon.math.serialization.converter.JSONConverter;
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
-import org.cryptimeleon.math.structures.groups.elliptic.type3.bn.BarretoNaehrigBilinearGroup;
+import org.cryptimeleon.mclwrap.bn254.MclBilinearGroup;
+import org.cryptimeleon.mclwrap.bn254.MclBilinearGroup.GroupChoice;
 import org.cryptimeleon.math.structures.rings.zn.Zn;
 
 import dittor.crypto.CA;
@@ -41,7 +42,8 @@ public class Main {
         int n = 3;
 
         System.out.println("Initializing Bilinear Group...");
-        BilinearGroup pairing = new BarretoNaehrigBilinearGroup(100); // eliptic curve with 100 bits security parameter
+        BilinearGroup pairing = new MclBilinearGroup(GroupChoice.BLS12_381); // BLS12-381 curve (mclwrap/MCL), 128 bits
+                                                                             // security parameter
         // Zn zp = pairing.getZn(); // scalar field containing all the big integers
         // modulo the prime order p of the curve
 
