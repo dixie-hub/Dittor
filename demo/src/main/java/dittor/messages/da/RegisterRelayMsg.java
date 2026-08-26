@@ -2,6 +2,9 @@ package dittor.messages.da;
 
 import java.nio.charset.StandardCharsets;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.cryptimeleon.math.serialization.converter.JSONConverter;
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
@@ -21,12 +24,18 @@ public class RegisterRelayMsg extends ProtoMessage {
     private final Proof identityProof;
     private final String context;
 
-    public RegisterRelayMsg(GroupElement pubKey, VRFResult vrfData, Proof identityProof, String context) {
+    private final String nodeId;
+    private final List<String> familyIds;
+
+    public RegisterRelayMsg(GroupElement pubKey, VRFResult vrfData, Proof identityProof, String context, String nodeId, List<String> familyIds) {
         super(MSG_ID);
         this.userPublicKeyG2 = pubKey;
         this.vrfData = vrfData;
         this.identityProof = identityProof;
         this.context = context;
+
+        this.nodeId = nodeId;
+        this.familyIds = familyIds;
     }
 
     public GroupElement getUserPubKeyG2() {
@@ -43,6 +52,14 @@ public class RegisterRelayMsg extends ProtoMessage {
 
     public String getContext() {
         return context;
+    }
+
+    public String getNodeId() {
+        return nodeId;
+    }
+
+    public List<String> getFamilyIds() {
+        return familyIds;
     }
 
     public static ISerializer<RegisterRelayMsg> serializer(BilinearGroup pairing) {
@@ -67,13 +84,17 @@ public class RegisterRelayMsg extends ProtoMessage {
                 writeString(out, zkpStr);
                 writeString(out, proofChallengeStr);
                 writeString(out, proofResponseStr);
+
+                writeString(out, msg.nodeId);
+                out.writeInt(msg.familyIds.size());
+                for (String familyId : msg.familyIds)
+                    writeString(out, familyId);
             }
 
             @Override
             public RegisterRelayMsg deserialize(ByteBuf in) {
                 JSONConverter jsonConverter = new JSONConverter();
 
-                // read context metadata
                 int contextLen = in.readInt();
                 byte[] contextBytes = new byte[contextLen];
                 in.readBytes(contextBytes);
@@ -85,8 +106,14 @@ public class RegisterRelayMsg extends ProtoMessage {
                 String proofChallengeStr = readString(in);
                 String proofResponseStr = readString(in);
 
+                String nodeId = readString(in);
+                int familyIdsCount = in.readInt();
+                List<String> familyIds = new ArrayList<>();
+                for (int i = 0; i < familyIdsCount; i++) {
+                    familyIds.add(readString(in));
+                }
+
                 try {
-                    // restoring raw bytes into curve coordinates
                     GroupElement pk = pairing.getG2().restoreElement(jsonConverter.deserialize(pkStr));
                     GroupElement nym = pairing.getGT().restoreElement(jsonConverter.deserialize(nymStr));
                     GroupElement zkp = pairing.getG1().restoreElement(jsonConverter.deserialize(zkpStr));
@@ -98,7 +125,7 @@ public class RegisterRelayMsg extends ProtoMessage {
                     VRFResult vrfData = new VRFResult(nym, zkp);
                     Proof identityProof = new Proof(challenge, response);
 
-                    return new RegisterRelayMsg(pk, vrfData, identityProof, context);
+                    return new RegisterRelayMsg(pk, vrfData, identityProof, context, nodeId, familyIds);
                 } catch (Exception e) {
                     System.out.println("Error: ");
                     e.printStackTrace();

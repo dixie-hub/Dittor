@@ -1,6 +1,7 @@
 package dittor.protocols;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Properties;
 
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
@@ -48,8 +49,16 @@ public class DAProtocol extends GenericProtocol {
 
         RegisterRelayReplyMsg reply;
         if (isVrfValid && isZkpValid) {
-            System.out.println("[DA] Verification SUCCESS. Adding to Tor consensus list.");
-            reply = new RegisterRelayReplyMsg(true, "Authorized: Added to Tor relay consensus directory.");
+            boolean accepted = cryptoDA.registerNode(msg.getContext(), msg.getVrfData().getPseudonym(), msg.getNodeId(), new HashSet<>(msg.getFamilyIds()));
+
+            if (accepted) {
+                System.out.println("[DA] Verification SUCCESS. Adding to Tor Consensus list.");
+                reply = new RegisterRelayReplyMsg(true, "Authorized: Added to Tor relay consensus directory.");
+            }
+            else {
+                System.err.println("[DA] Verification FAILURE. Pseudonym is being reused without a shared family!");
+                reply = new RegisterRelayReplyMsg(false, "Unauthorized: pseudonym already claimed by another node.");
+            }
         } else {
             System.err.println("[DA] Verification FAILURE. Sybil signature validation failed.");
             reply = new RegisterRelayReplyMsg(false, "Unauthorized: ZKP identity link validation failed."); 

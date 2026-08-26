@@ -108,7 +108,8 @@ public class Main {
                 boolean shareValid = CA.verifyShare(s_ij, t_ij, senderCA.getRevealedCommitments(), recipientCA.caID, g1,
                         h1, pairing.getZn());
                 if (!shareValid) {
-                    System.out.println("CA-" + senderCA.caID + " DISQUALIFIED: share sent to CA-" + recipientCA.caID + " failed verification.");
+                    System.out.println("CA-" + senderCA.caID + " DISQUALIFIED: share sent to CA-" + recipientCA.caID
+                            + " failed verification.");
                     disqualifiedSenderIds.add(senderCA.caID);
                     continue;
                 }
@@ -119,7 +120,8 @@ public class Main {
 
         qualifiedCAs.removeIf(ca -> disqualifiedSenderIds.contains(ca.caID));
         if (qualifiedCAs.size() < t) {
-            throw new IllegalStateException("DKG failed: less than " + t + " qualified CAs remain after disqualifications.");
+            throw new IllegalStateException(
+                    "DKG failed: less than " + t + " qualified CAs remain after disqualifications.");
         }
 
         List<GroupElement> pkG1s = new ArrayList<>();
@@ -135,7 +137,7 @@ public class Main {
                 if (!disqualifiedSenderIds.contains(entry.getKey()))
                     shares.add(entry.getValue());
             }
-            ca.finalizeDKG(shares, pkG1s, pkG2s); 
+            ca.finalizeDKG(shares, pkG1s, pkG2s);
         }
 
         System.out.println("DKG Complete. Master keys established.");
@@ -194,7 +196,7 @@ public class Main {
         GroupElement mpkG2 = qualifiedCAs.get(0).getMasterPubKeyG2();
 
         UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, g1, h1, mpkG1, mpkG2, g1,
-                g2);
+                g2, "000a", new ArrayList<>());
         Properties userProperties = new Properties();
         userProperties.setProperty("address", localhost);
         userProperties.setProperty("port", "8050");

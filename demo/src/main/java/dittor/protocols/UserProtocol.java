@@ -43,6 +43,8 @@ public class UserProtocol extends GenericProtocol {
     private final GroupElement mpkG2;
     private final GroupElement g1;
     private final GroupElement g2;
+    private final String nodeId;
+    private final List<String> familyIds;
 
     private int channelID;
     private Host daHost;
@@ -52,7 +54,9 @@ public class UserProtocol extends GenericProtocol {
     private final Map<Integer, GroupElement> receivedShares;
     private boolean thresholdReached = false;
 
-    public UserProtocol(BilinearGroup pairing, User cryptoUser, int threshold, DodisYampolskiyVRF vrf, SchnorrZKP schnorr, GroupElement baseG, GroupElement baseH, GroupElement mpkG1, GroupElement mpkG2, GroupElement g1, GroupElement g2) {
+    public UserProtocol(BilinearGroup pairing, User cryptoUser, int threshold, DodisYampolskiyVRF vrf,
+            SchnorrZKP schnorr, GroupElement baseG, GroupElement baseH, GroupElement mpkG1, GroupElement mpkG2,
+            GroupElement g1, GroupElement g2, String nodeId, List<String> familyIds) {
         super(PROTOCOL_NAME, PROTOCOL_ID);
         this.pairing = pairing;
         this.cryptoUser = cryptoUser;
@@ -65,6 +69,8 @@ public class UserProtocol extends GenericProtocol {
         this.mpkG2 = mpkG2;
         this.g1 = g1;
         this.g2 = g2;
+        this.nodeId = nodeId;
+        this.familyIds = familyIds;
         this.receivedShares = new HashMap<>();
         this.caHostToIDMap = new HashMap<>();
     }
@@ -79,7 +85,7 @@ public class UserProtocol extends GenericProtocol {
         registerChannelEventHandler(channelID, OutConnectionUp.EVENT_ID, this::onOutConnectionUp);
         registerChannelEventHandler(channelID, OutConnectionFailed.EVENT_ID, this::onOutConnectionFailed);
         registerChannelEventHandler(channelID, OutConnectionDown.EVENT_ID, this::onOutConnectionDown);
-        
+
         registerMessageSerializer(channelID, CredentialRequestMsg.MSG_ID, CredentialRequestMsg.serializer(pairing));
         registerMessageSerializer(channelID, CredentialReplyMsg.MSG_ID, CredentialReplyMsg.serializer(pairing));
         registerMessageSerializer(channelID, RegisterRelayMsg.MSG_ID, RegisterRelayMsg.serializer(pairing));
@@ -123,7 +129,7 @@ public class UserProtocol extends GenericProtocol {
     private void onOutConnectionDown(OutConnectionDown event, int channel) {
         System.out.println("[User] Connection severed from host: " + event.getNode());
     }
-    
+
     private void handleCredentialReply(CredentialReplyMsg msg, Host from, short sourceProto, int channel) {
         int incomingCaID = msg.getCAID();
         System.out.println("[User] Received valid signature share from CA ID: " + incomingCaID);
@@ -132,7 +138,8 @@ public class UserProtocol extends GenericProtocol {
 
         if (receivedShares.size() >= threshold && !thresholdReached) {
             thresholdReached = true;
-            System.out.println("[User] Threshold criteria satisfied (" + threshold + " shares collected). Unblinding tokens...");
+            System.out.println(
+                    "[User] Threshold criteria satisfied (" + threshold + " shares collected). Unblinding tokens...");
 
             List<Integer> signerIDs = new ArrayList<>(receivedShares.keySet());
             List<GroupElement> sigShares = new ArrayList<>(receivedShares.values());
@@ -150,7 +157,7 @@ public class UserProtocol extends GenericProtocol {
 
     private void sendRegistrationToDA() {
         System.out.println("[User] Formulating Zero-Knowledge Linkage Proof and VRF Token for DA consensus...");
-        
+
         String context = "TorRelayConsensus2026";
 
         GroupElement userPubKey = cryptoUser.getPublicKeyG2();
@@ -159,8 +166,9 @@ public class UserProtocol extends GenericProtocol {
 
         System.out.println(pairing.getGT().getClass());
 
-        RegisterRelayMsg registrationMsg = new RegisterRelayMsg(userPubKey, vrfResult, identityZKP, context);
-        
+        RegisterRelayMsg registrationMsg = new RegisterRelayMsg(userPubKey, vrfResult, identityZKP, context, nodeId,
+                familyIds);
+
         sendMessage(registrationMsg, DAProtocol.PROTOCOL_ID, daHost);
     }
 
@@ -168,8 +176,7 @@ public class UserProtocol extends GenericProtocol {
         if (msg.isSuccess()) {
             System.out.println("Registration approved: " + msg.getStatusMessage());
             System.out.println("[User] Staying alive to host the DAServer bridge on port 8081...");
-        }
-        else {
+        } else {
             System.err.println("Registration denied: " + msg.getStatusMessage());
             System.out.println("[User] Execution cycle failed, shutting down system");
             System.exit(1);
