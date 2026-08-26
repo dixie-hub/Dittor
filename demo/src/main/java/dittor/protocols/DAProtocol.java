@@ -45,27 +45,28 @@ public class DAProtocol extends GenericProtocol {
         System.out.println("[DA] Verifying Sybil defense tokens for incoming Relay registration...");
 
         boolean isVrfValid = cryptoDA.verifyVrf(msg.getUserPubKeyG2(), msg.getVrfData(), msg.getContext());
-        boolean isZkpValid = cryptoDA.verifyIdentityProof(msg.getUserPubKeyG2(), msg.getIdentityProof(), msg.getContext());
+        boolean isCredentialValid = cryptoDA.verifyCredentialLinkage(msg.getUserPubKeyG2(),
+                msg.getCredentialCommitmentG1(), msg.getCredential(), msg.getDLEQProof(), msg.getContext());
 
         RegisterRelayReplyMsg reply;
-        if (isVrfValid && isZkpValid) {
-            boolean accepted = cryptoDA.registerNode(msg.getContext(), msg.getVrfData().getPseudonym(), msg.getNodeId(), new HashSet<>(msg.getFamilyIds()));
+        if (isVrfValid && isCredentialValid) {
+            boolean accepted = cryptoDA.registerNode(msg.getContext(), msg.getVrfData().getPseudonym(), msg.getNodeId(),
+                    new HashSet<>(msg.getFamilyIds()));
 
             if (accepted) {
                 System.out.println("[DA] Verification SUCCESS. Adding to Tor Consensus list.");
                 reply = new RegisterRelayReplyMsg(true, "Authorized: Added to Tor relay consensus directory.");
-            }
-            else {
+            } else {
                 System.err.println("[DA] Verification FAILURE. Pseudonym is being reused without a shared family!");
                 reply = new RegisterRelayReplyMsg(false, "Unauthorized: pseudonym already claimed by another node.");
             }
         } else {
-            System.err.println("[DA] Verification FAILURE. Sybil signature validation failed.");
-            reply = new RegisterRelayReplyMsg(false, "Unauthorized: ZKP identity link validation failed."); 
+            System.err.println("[DA] Verification FAILURE. Credential linkage validation failed.");
+            reply = new RegisterRelayReplyMsg(false, "Unauthorized: credential linkage validation failed.");
         }
 
         openConnection(from, channel);
         sendMessage(reply, sourceProto, from);
     }
-    
+
 }

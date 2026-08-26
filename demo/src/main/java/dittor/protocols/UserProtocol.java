@@ -11,6 +11,7 @@ import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 
 import dittor.crypto.User;
+import dittor.crypto.vrf.DLEQZKP;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
 import dittor.crypto.vrf.SchnorrZKP;
 import dittor.crypto.vrf.Proof;
@@ -37,6 +38,7 @@ public class UserProtocol extends GenericProtocol {
 
     private final DodisYampolskiyVRF vrf;
     private final SchnorrZKP schnorr;
+    private final DLEQZKP dleqZKP;
     private final GroupElement baseG;
     private final GroupElement baseH;
     private final GroupElement mpkG1;
@@ -53,16 +55,18 @@ public class UserProtocol extends GenericProtocol {
     private GroupElement blindedCommitment;
     private final Map<Integer, GroupElement> receivedShares;
     private boolean thresholdReached = false;
+    private GroupElement credential;
 
     public UserProtocol(BilinearGroup pairing, User cryptoUser, int threshold, DodisYampolskiyVRF vrf,
-            SchnorrZKP schnorr, GroupElement baseG, GroupElement baseH, GroupElement mpkG1, GroupElement mpkG2,
-            GroupElement g1, GroupElement g2, String nodeId, List<String> familyIds) {
+            SchnorrZKP schnorr, DLEQZKP dleqZKP, GroupElement baseG, GroupElement baseH, GroupElement mpkG1,
+            GroupElement mpkG2, GroupElement g1, GroupElement g2, String nodeId, List<String> familyIds) {
         super(PROTOCOL_NAME, PROTOCOL_ID);
         this.pairing = pairing;
         this.cryptoUser = cryptoUser;
         this.threshold = threshold;
         this.vrf = vrf;
         this.schnorr = schnorr;
+        this.dleqZKP = dleqZKP;
         this.baseG = baseG;
         this.baseH = baseH;
         this.mpkG1 = mpkG1;
@@ -146,6 +150,7 @@ public class UserProtocol extends GenericProtocol {
 
             GroupElement aggregatedBlindedSignature = cryptoUser.aggregateShares(sigShares, signerIDs);
             GroupElement unblindedSignature = cryptoUser.unblindSignature(aggregatedBlindedSignature, this.mpkG1);
+            this.credential = unblindedSignature;
 
             boolean localCheck = cryptoUser.verifyCredential(unblindedSignature, this.mpkG2, this.g1, this.g2);
             System.out.println("[User] Local signature validation diagnostic check: " + (localCheck ? "PASS" : "FAIL"));
@@ -156,18 +161,17 @@ public class UserProtocol extends GenericProtocol {
     }
 
     private void sendRegistrationToDA() {
-        System.out.println("[User] Formulating Zero-Knowledge Linkage Proof and VRF Token for DA consensus...");
+        System.out.println("[User] Formulating DLEQ Credential Linkage Proof and VRF Token for DA consensus...");
 
         String context = "TorRelayConsensus2026";
 
         GroupElement userPubKey = cryptoUser.getPublicKeyG2();
         VRFResult vrfResult = cryptoUser.generateVRFPseudonym(this.vrf, context);
-        Proof identityZKP = cryptoUser.generateSchnorrPoK(this.schnorr, context);
+        GroupElement credentialCommitmentG1 = cryptoUser.getCredentialCommitmentG1(this.g1);
+        Proof dleqProof = cryptoUser.generateDLEQProof(this.dleqZKP, credentialCommitmentG1, context);
 
-        System.out.println(pairing.getGT().getClass());
-
-        RegisterRelayMsg registrationMsg = new RegisterRelayMsg(userPubKey, vrfResult, identityZKP, context, nodeId,
-                familyIds);
+        RegisterRelayMsg registrationMsg = new RegisterRelayMsg(userPubKey, vrfResult, credentialCommitmentG1,
+                this.credential, dleqProof, context, nodeId, familyIds);
 
         sendMessage(registrationMsg, DAProtocol.PROTOCOL_ID, daHost);
     }

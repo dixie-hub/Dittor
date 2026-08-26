@@ -20,6 +20,7 @@ import org.cryptimeleon.math.structures.rings.zn.Zn;
 import dittor.crypto.CA;
 import dittor.crypto.DA;
 import dittor.crypto.User;
+import dittor.crypto.vrf.DLEQZKP;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
 import dittor.crypto.vrf.Proof;
 import dittor.crypto.vrf.SchnorrZKP;
@@ -148,6 +149,7 @@ public class Main {
 
         DodisYampolskiyVRF vrf = new DodisYampolskiyVRF(pairing);
         SchnorrZKP schnorr = new SchnorrZKP(pairing);
+        DLEQZKP dleqZKP = new DLEQZKP(pairing);
 
         // ---------------------------------------------------------
         // 2. BABEL NETWORK
@@ -159,7 +161,7 @@ public class Main {
 
         // Setup DA on port 10000
         System.out.println("Starting DA node on port 9000");
-        DA cryptoDA = new DA(vrf, schnorr);
+        DA cryptoDA = new DA(vrf, schnorr, dleqZKP, pairing, g1, g2, qualifiedCAs.get(0).getMasterPubKeyG2());
         DAProtocol daProtocol = new DAProtocol(pairing, cryptoDA);
         Properties daProperties = new Properties();
         daProperties.setProperty("address", localhost);
@@ -195,7 +197,7 @@ public class Main {
         GroupElement mpkG1 = qualifiedCAs.get(0).getMasterPubKeyG1(); // master keys from DKG phase
         GroupElement mpkG2 = qualifiedCAs.get(0).getMasterPubKeyG2();
 
-        UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, g1, h1, mpkG1, mpkG2, g1,
+        UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, dleqZKP, g1, h1, mpkG1, mpkG2, g1,
                 g2, "000a", new ArrayList<>());
         Properties userProperties = new Properties();
         userProperties.setProperty("address", localhost);

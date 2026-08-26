@@ -7,7 +7,9 @@ import java.util.Map;
 import java.util.Set;
 
 import org.cryptimeleon.math.structures.groups.GroupElement;
+import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 
+import dittor.crypto.vrf.DLEQZKP;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
 import dittor.crypto.vrf.Proof;
 import dittor.crypto.vrf.SchnorrZKP;
@@ -20,13 +22,23 @@ public class DA {
 
     private final DodisYampolskiyVRF dodisYampolskiy;
     private final SchnorrZKP schnorr;
+    private final DLEQZKP dleqZKP;
+    private final BilinearGroup pairing;
+    private final GroupElement g1;
+    private final GroupElement g2;
+    private final GroupElement mpkG2;
 
     // (context, pseudónimo) -> (nodeId -> family_ids desse nó)
     private final Map<String, Map<String, Set<String>>> registrations = new HashMap<>();
 
-    public DA(DodisYampolskiyVRF dodisYampolskiy, SchnorrZKP schnorr) {
+    public DA(DodisYampolskiyVRF dodisYampolskiy, SchnorrZKP schnorr, DLEQZKP dleqZKP, BilinearGroup pairing, GroupElement g1, GroupElement g2, GroupElement mpkG2) {
         this.dodisYampolskiy = dodisYampolskiy;
         this.schnorr = schnorr;
+        this.dleqZKP = dleqZKP;
+        this.pairing = pairing;
+        this.g1 = g1;
+        this.g2 = g2;
+        this.mpkG2 = mpkG2;
     }
 
     public boolean verifyVrf(GroupElement userPubKeyG2, VRFResult vrfData, String context) {
@@ -51,6 +63,26 @@ public class DA {
             return isValid;
         } catch (Exception e) {
             System.err.println("[DA-Crypto] Schnorr ZKP validation failed: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean verifyCredentialLinkage(GroupElement userPubKeyG2, GroupElement credentialCommitmentG1, GroupElement credential, Proof dleqProof, String context) {
+        System.out.println("[DA-Crypto] Verifying DLEQ credential linkage proof...");
+
+        try  {
+            boolean isDleqValid = dleqZKP.verifyProof(credentialCommitmentG1, userPubKeyG2, context, dleqProof);
+            System.out.println("[DA-Crypto] DLEQ Eval Result: " + (isDleqValid ? "PASS" : "FAIL"));
+            if (!isDleqValid) return false;
+
+            GroupElement leftSide = pairing.getBilinearMap().apply(credential, g2).compute();
+            GroupElement rightSide = pairing.getBilinearMap().apply(credentialCommitmentG1, mpkG2).compute();
+            boolean isCredentialValid = leftSide.equals(rightSide);
+            System.out.println("[DA-Crypto] Credential Bilinear Check Result: " + (isCredentialValid ? "PASS" : "FAIL"));
+            return isCredentialValid;
+        } catch (Exception e) {
+            System.err.println("[DA-Crypto] Credential linkage validation failed: " + e.getMessage());
             e.printStackTrace();
             return false;
         }

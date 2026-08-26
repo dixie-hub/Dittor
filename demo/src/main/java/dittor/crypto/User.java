@@ -7,6 +7,7 @@ import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 import org.cryptimeleon.math.structures.rings.zn.Zn;
 
+import dittor.crypto.vrf.DLEQZKP;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
 import dittor.crypto.vrf.Proof;
 import dittor.crypto.vrf.SchnorrZKP;
@@ -43,6 +44,14 @@ public class User {
 
     public Proof generateSchnorrPoK(SchnorrZKP schnorrZKP, String context) {
         return schnorrZKP.generateProof(this.secretX, this.publicKeyG2, context);
+    }
+
+    public GroupElement getCredentialCommitmentG1(GroupElement g1) {
+        return g1.pow(secretX).compute();
+    }
+
+    public Proof generateDLEQProof(DLEQZKP dleqZKP, GroupElement g1x, String context) {
+        return dleqZKP.generateProof(this.secretX, g1x, this.publicKeyG2, context);
     }
 
     public GroupElement aggregateShares(List<GroupElement> sigShares, List<Integer> signerIDs) {
