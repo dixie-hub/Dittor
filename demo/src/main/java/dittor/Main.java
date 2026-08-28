@@ -64,7 +64,8 @@ public class Main {
             caNetworkMap.put(new Host(InetAddress.getByName(localhost), caBasePort + i), i);
         }
 
-        // pergunta a mpk a uma CA que já esteja pronta, e repete até o DKG estar finalizado
+        // pergunta a mpk a uma CA que já esteja pronta, e repete até o DKG estar
+        // finalizado
         System.out.println("Fetching master public key from CA-1...");
         MasterPubKeyFetcher mpkFetcher = new MasterPubKeyFetcher(pairing);
         Properties fetcherProperties = new Properties();
@@ -78,7 +79,7 @@ public class Main {
         GroupElement[] mpk = mpkFetcher.fetchBlocking(firstCAHost, 1, 10, 3000);
         GroupElement mpkG1 = mpk[0];
         GroupElement mpkG2 = mpk[1];
-        System.out.println("Master public key received!"); 
+        System.out.println("Master public key received!");
 
         // Setup DA on port 10000
         System.out.println("Starting DA node on port 10000");
@@ -96,8 +97,9 @@ public class Main {
         // Setup User Node on port 8050
         System.out.println("Starting User node on port 8050...");
         User cryptoUser = new User(pairing);
-        
-        UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, dleqZKP, g1, h1, mpkG1, mpkG2, g1,
+
+        UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, dleqZKP, g1, h1, mpkG1,
+                mpkG2, g1,
                 g2, "000a", new ArrayList<>());
         Properties userProperties = new Properties();
         userProperties.setProperty("address", localhost);
@@ -133,19 +135,24 @@ public class Main {
 
             String context = "TorRelayConsensus2026";
 
-            GroupElement userPubKey = cryptoUser.getPublicKeyG2();
-            VRFResult vrfResult = cryptoUser.generateVRFPseudonym(vrf, context);
-            Proof identityZKP = cryptoUser.generateSchnorrPoK(schnorr, context);
+            GroupElement userPubKey = userProtocol.getUserPubKey();
+            VRFResult vrfResult = userProtocol.getVrfResult();
 
+            GroupElement g1x = userProtocol.getCredentialCommitmentG1();
+
+            GroupElement credential = userProtocol.getCredential();
+            Proof dleqProof = userProtocol.getDleqProof();
             String realPkJSON = jsonConverter.serialize(userPubKey.getRepresentation());
             String realNymJSON = jsonConverter.serialize(vrfResult.getPseudonym().getRepresentation());
             String realVrfZkpJSON = jsonConverter.serialize(vrfResult.getZeroKnowledgeProof().getRepresentation());
-
-            String realProofChallengeString = jsonConverter.serialize(identityZKP.getChallenge().getRepresentation());
-            String realProofResponseString = jsonConverter.serialize(identityZKP.getResponse().getRepresentation());
+            String g1xJSON = jsonConverter.serialize(g1x.getRepresentation());
+            String credentialJSON = jsonConverter.serialize(credential.getRepresentation());
+            String dleqChallengeJSON = jsonConverter.serialize(dleqProof.getChallenge().getRepresentation());
+            String dleqResponseJSON = jsonConverter.serialize(dleqProof.getResponse().getRepresentation());
 
             String dittorProofString = "dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " "
-                    + realVrfZkpJSON + " " + realProofChallengeString + " " + realProofResponseString;
+                    + realVrfZkpJSON + " " + g1xJSON + " " + credentialJSON + " " + dleqChallengeJSON + " "
+                    + dleqResponseJSON;
             System.out.println("\n=======================================");
             System.out.println("[DITTOR CONFIG] " + dittorProofString);
             System.out.println("=======================================\n");

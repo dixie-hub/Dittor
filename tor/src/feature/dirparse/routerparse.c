@@ -129,7 +129,7 @@ const token_rule_t routerdesc_token_table[] = {
   T01("tunnelled-dir-server",K_DIR_TUNNELLED,       NO_ARGS, NO_OBJ ),
 
   //--- DITTOR ---
-  T01("dittor-proof", K_OPT_DITTOR_PROOF, GE(6), NO_OBJ),
+  T01("dittor-proof", K_OPT_DITTOR_PROOF, GE(8), NO_OBJ),
 
   END_OF_TABLE
 };
@@ -946,48 +946,73 @@ router_parse_entry_from_string(const char *s, const char *end, int cache_copy,
   // DITTOR START
   tok = find_opt_by_keyword(tokens, K_OPT_DITTOR_PROOF);
 
-  char validation_payload[16384]; 
+  char validation_payload[16384];
   int is_mock = 0;
 
-  if (tok != NULL) { 
-    if (tok->n_args >= 6 && tok->args[0] != NULL && strcmp(tok->args[0], "TorRelayConsensus2026") == 0) {
-      snprintf(validation_payload, sizeof(validation_payload), 
-              "VALIDATE %s|%s|%s|%s|%s|%s\n",
-              tok->args[0], tok->args[1], tok->args[2], tok->args[3], tok->args[4], tok->args[5]);
-              
-      snprintf(last_seen_valid_dittor_proof, sizeof(last_seen_valid_dittor_proof), "%s", validation_payload);      is_mock = 0;
+  if (tok != NULL) {
+    if (tok->n_args >= 8 && tok->args[0] != NULL &&
+        strcmp(tok->args[0], "TorRelayConsensus2026") == 0) {
+      char node_id_hex[HEX_DIGEST_LEN + 1];
+      base16_encode(node_id_hex, sizeof(node_id_hex),
+                    router->cache_info.identity_digest, DIGEST_LEN);
+
+      char *family_ids_str;
+      if (router->family_ids && smartlist_len(router->family_ids) > 0) {
+        family_ids_str =
+            smartlist_join_strings(router->family_ids, ",", 0, NULL);
+      } else {
+        family_ids_str = tor_strdup("-");
+      }
+
+      snprintf(validation_payload, sizeof(validation_payload),
+               "VALIDATE %s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n", tok->args[0],
+               tok->args[1], tok->args[2], tok->args[3], tok->args[4],
+               tok->args[5], tok->args[6], tok->args[7], node_id_hex,
+               family_ids_str);
+      tor_free(family_ids_str);
+
+      snprintf(last_seen_valid_dittor_proof,
+               sizeof(last_seen_valid_dittor_proof), "%s", validation_payload);
+      is_mock = 0;
     } else {
       // Fallback logic for mock descriptors
       if (strlen(last_seen_valid_dittor_proof) > 0) {
-        snprintf(validation_payload, sizeof(validation_payload), "%s", last_seen_valid_dittor_proof);
+        snprintf(validation_payload, sizeof(validation_payload), "%s",
+                 last_seen_valid_dittor_proof);
       } else {
-        snprintf(validation_payload, sizeof(validation_payload), 
-                "VALIDATE TorRelayConsensus2026|EMPTY|EMPTY|EMPTY|EMPTY|EMPTY\n");
+        snprintf(validation_payload, sizeof(validation_payload),
+                 "VALIDATE "
+                 "TorRelayConsensus2026|EMPTY|EMPTY|EMPTY|EMPTY|EMPTY|EMPTY|"
+                 "EMPTY|EMPTY|EMPTY\n");
       }
       is_mock = 1;
     }
 
-    log_notice(LD_DIR,
-               "[Tor-Dittor] Passing %s descriptor payload to loopback proxy...",
-               is_mock ? "mock" : "real");
+    log_notice(
+        LD_DIR,
+        "[Tor-Dittor] Passing %s descriptor payload to loopback proxy...",
+        is_mock ? "mock" : "real");
 
     char *verification_response = dittorProxy(8081, validation_payload);
 
     if (verification_response != NULL) {
       tor_strstrip(verification_response, "\r\n ");
       if (strcmp(verification_response, "VALID") == 0 ||
-          strcmp(verification_response, "Added to Tor relay consensus directory.") == 0) {
+          strcmp(verification_response,
+                 "Added to Tor relay consensus directory.") == 0) {
         log_notice(LD_DIR, "[Tor-Dittor] Verification SUCCESS for '%s'!",
                    router->nickname ? router->nickname : "unknown");
       } else {
         log_warn(LD_DIR,
-                 "[Tor-Dittor] Verification REJECTED by backend for '%s'. Response: %s",
+                 "[Tor-Dittor] Verification REJECTED by backend for '%s'. "
+                 "Response: %s",
                  router->nickname ? router->nickname : "unknown",
                  verification_response);
       }
-      tor_free(verification_response); 
+      tor_free(verification_response);
     } else {
-      log_warn(LD_DIR, "[Tor-Dittor] Loopback connection to port 8081 failed. Keeping node alive.");
+      log_warn(LD_DIR, "[Tor-Dittor] Loopback connection to port 8081 failed. "
+                       "Keeping node alive.");
     }
   }
   // DITTOR END

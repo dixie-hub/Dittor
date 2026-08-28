@@ -54,7 +54,11 @@ public class UserProtocol extends GenericProtocol {
     private GroupElement blindedCommitment;
     private final Map<Integer, GroupElement> receivedShares;
     private boolean thresholdReached = false;
-    private GroupElement credential;
+    private GroupElement credential; // sigma = g1^(x*msk)
+    private GroupElement lastUserPubKey;
+    private VRFResult lastVrfResult;
+    private GroupElement lastCredentialCommitmentG1;
+    private Proof lastDleqProof;
 
     public UserProtocol(BilinearGroup pairing, User cryptoUser, int threshold, DodisYampolskiyVRF vrf,
             SchnorrZKP schnorr, DLEQZKP dleqZKP, GroupElement baseG, GroupElement baseH, GroupElement mpkG1,
@@ -168,10 +172,35 @@ public class UserProtocol extends GenericProtocol {
         GroupElement credentialCommitmentG1 = cryptoUser.getCredentialCommitmentG1(this.g1);
         Proof dleqProof = cryptoUser.generateDLEQProof(this.dleqZKP, credentialCommitmentG1, context);
 
+        this.lastUserPubKey = userPubKey;
+        this.lastVrfResult = vrfResult;
+        this.lastCredentialCommitmentG1 = credentialCommitmentG1;
+        this.lastDleqProof = dleqProof;
+
         RegisterRelayMsg registrationMsg = new RegisterRelayMsg(userPubKey, vrfResult, credentialCommitmentG1,
                 this.credential, dleqProof, context, nodeId, familyIds);
 
         sendMessage(registrationMsg, DAProtocol.PROTOCOL_ID, daHost);
+    }
+
+    public GroupElement getUserPubKey() {
+        return lastUserPubKey;
+    }
+
+    public VRFResult getVrfResult() {
+        return lastVrfResult;
+    }
+
+    public GroupElement getCredentialCommitmentG1() {
+        return lastCredentialCommitmentG1;
+    }
+
+    public GroupElement getCredential() {
+        return credential;
+    }
+
+    public Proof getDleqProof() {
+        return lastDleqProof;
     }
 
     private void handleRegisterRelayReply(RegisterRelayReplyMsg msg, Host from, short sourceProto, int channel) {
