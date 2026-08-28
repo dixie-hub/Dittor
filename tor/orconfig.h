@@ -27,7 +27,7 @@
 #define CONFDIR "/usr/local/etc/tor"
 
 /* Flags passed to configure */
-#define CONFIG_FLAGS ""
+#define CONFIG_FLAGS "--no-create --no-recursion"
 
 /* Enable smartlist debugging */
 /* #undef DEBUG_SMARTLIST */
