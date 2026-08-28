@@ -24,7 +24,6 @@ public class DA {
     private final SchnorrZKP schnorr;
     private final DLEQZKP dleqZKP;
     private final BilinearGroup pairing;
-    private final GroupElement g1;
     private final GroupElement g2;
     private final GroupElement mpkG2;
 
@@ -36,7 +35,6 @@ public class DA {
         this.schnorr = schnorr;
         this.dleqZKP = dleqZKP;
         this.pairing = pairing;
-        this.g1 = g1;
         this.g2 = g2;
         this.mpkG2 = mpkG2;
     }

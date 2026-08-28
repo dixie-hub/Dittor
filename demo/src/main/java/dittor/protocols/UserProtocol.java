@@ -37,7 +37,6 @@ public class UserProtocol extends GenericProtocol {
     private final int threshold;
 
     private final DodisYampolskiyVRF vrf;
-    private final SchnorrZKP schnorr;
     private final DLEQZKP dleqZKP;
     private final GroupElement baseG;
     private final GroupElement baseH;
@@ -65,7 +64,6 @@ public class UserProtocol extends GenericProtocol {
         this.cryptoUser = cryptoUser;
         this.threshold = threshold;
         this.vrf = vrf;
-        this.schnorr = schnorr;
         this.dleqZKP = dleqZKP;
         this.baseG = baseG;
         this.baseH = baseH;

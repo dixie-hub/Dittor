@@ -1,6 +1,4 @@
-dittor\crypto\vrf\Proof.class
 dittor\messages\da\RegisterRelayMsg.class
-dittor\messages\da\RegisterRelayMsg$1.class
 dittor\crypto\vrf\VRFResult.class
 dittor\tor\DAServer.class
 dittor\messages\ca\CredentialRequestMsg$1.class
@@ -8,13 +6,15 @@ dittor\messages\ca\CredentialReplyMsg$1.class
 dittor\messages\ca\CredentialRequestMsg.class
 dittor\messages\da\RegisterRelayReplyMsg$1.class
 dittor\crypto\User.class
+dittor\crypto\vrf\SchnorrZKP.class
+dittor\protocols\UserProtocol.class
+dittor\crypto\CA.class
+dittor\crypto\DA.class
+dittor\crypto\vrf\Proof.class
+dittor\messages\da\RegisterRelayMsg$1.class
 dittor\messages\da\RegisterRelayReplyMsg.class
 dittor\protocols\DAProtocol.class
 dittor\messages\ca\CredentialReplyMsg.class
 dittor\crypto\vrf\DodisYampolskiyVRF.class
-dittor\crypto\vrf\SchnorrZKP.class
-dittor\protocols\UserProtocol.class
 dittor\protocols\CAProtocol.class
-dittor\crypto\CA.class
-dittor\crypto\DA.class
 dittor\Main.class

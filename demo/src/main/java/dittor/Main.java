@@ -4,10 +4,7 @@ import java.io.FileWriter;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Properties;
 
 import org.cryptimeleon.math.serialization.converter.JSONConverter;
@@ -15,9 +12,7 @@ import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 import org.cryptimeleon.mclwrap.bn254.MclBilinearGroup;
 import org.cryptimeleon.mclwrap.bn254.MclBilinearGroup.GroupChoice;
-import org.cryptimeleon.math.structures.rings.zn.Zn;
 
-import dittor.crypto.CA;
 import dittor.crypto.DA;
 import dittor.crypto.User;
 import dittor.crypto.vrf.DLEQZKP;
@@ -25,8 +20,8 @@ import dittor.crypto.vrf.DodisYampolskiyVRF;
 import dittor.crypto.vrf.Proof;
 import dittor.crypto.vrf.SchnorrZKP;
 import dittor.crypto.vrf.VRFResult;
-import dittor.protocols.CAProtocol;
 import dittor.protocols.DAProtocol;
+import dittor.protocols.MasterPubKeyFetcher;
 import dittor.protocols.UserProtocol;
 import dittor.tor.DAServer;
 import pt.unl.fct.di.novasys.babel.core.Babel;
@@ -37,115 +32,18 @@ public class Main {
     public static void main(String[] args) throws Exception {
 
         // ---------------------------------------------------------
-        // 1. CRYPTOGRAPHIC SETUP (Simulating a Trusted Dealer phase)
+        // 1. CRYPTOGRAPHIC SETUP
         // ---------------------------------------------------------
 
-        // threshold t and CAs pool size n
         int t = 2;
         int n = 3;
 
         System.out.println("Initializing Bilinear Group...");
-        BilinearGroup pairing = new MclBilinearGroup(GroupChoice.BLS12_381); // BLS12-381 curve (mclwrap/MCL), 128 bits
-                                                                             // security parameter
-        // Zn zp = pairing.getZn(); // scalar field containing all the big integers
-        // modulo the prime order p of the curve
+        BilinearGroup pairing = new MclBilinearGroup(GroupChoice.BLS12_381); // BLS12-381 (mclwrap/MCL), 128 bits
 
-        // random points selected from G1 generator, acting as bases for exponents for
-        // Pedersen Commitment
         GroupElement g1 = pairing.getG1().getGenerator();
-        GroupElement h1 = pairing.getG1().getUniformlyRandomElement().compute();
+        GroupElement h1 = pairing.getHashIntoG1().hash("Dittor-Pedersen-h1-2026"); // fixo
         GroupElement g2 = pairing.getG2().getGenerator();
-
-        System.out.println("Running DKG protocol with " + t + "-of-" + n + " threshold for CAs...");
-
-        // Se o threshold é no mínimo 2 de três, guarda-se o segredo num polinómio de
-        // grau 1, ou seja uma linha: f(x) = a1*x + a0
-        System.out.println("Initializing " + n + " CAs...");
-        List<CA> CAs = new ArrayList<>();
-        for (int i = 1; i <= n; i++) {
-            CAs.add(new CA(i, pairing));
-        }
-
-        // CAs generate their own polynomial
-        for (CA ca : CAs)
-            ca.generatePrivatePolynomial(t);
-
-        // Fase 1 da adaptação de Gennaro, cálculo dos compromissos de Pedersen
-        // localmente e publicação do hash
-        for (CA ca : CAs)
-            ca.computeCommitments(g1, h1, g2);
-
-        Map<Integer, String> publishedHashes = new HashMap<>();
-        for (CA ca : CAs)
-            publishedHashes.put(ca.caID, ca.getCommitmentHash());
-
-        System.out.println("All " + n + " CAs published their commitment hashes. Next, the reveal phase...");
-
-        // Fase 2 da adaptação de Gennaro, revelação dos compromissos reais e
-        // desqualificação
-        List<CA> qualifiedCAs = new ArrayList<>();
-        for (CA ca : CAs) {
-            String recomputedHash = CA.hashCommitments(ca.getRevealedCommitments(), ca.getRevealedPubKeyG1(),
-                    ca.getRevealedPubKeyG2());
-            if (!recomputedHash.equals(publishedHashes.get(ca.caID))) {
-                System.out.println("CA-" + ca.caID + " DISQUALIFIED: revealed commitments don't match their hash.");
-                ca.disqualify();
-            } else
-                qualifiedCAs.add(ca);
-        }
-
-        // CAs enviam as avaliações dos polinómios s_ij e t_ij entre si e cada recetor
-        // verifica a share contra os compromissosa revelados do emissor antes de a
-        // aceitar
-        Map<Integer, Map<Integer, Zn.ZnElement>> secretSharesByRecipient = new HashMap<>();
-        Set<Integer> disqualifiedSenderIds = new HashSet<>();
-
-        for (CA recipientCA : qualifiedCAs) {
-            Map<Integer, Zn.ZnElement> received = new HashMap<>();
-            for (CA senderCA : qualifiedCAs) {
-                Zn.ZnElement s_ij = senderCA.evaluateSecretPolynomial(recipientCA.caID);
-                Zn.ZnElement t_ij = senderCA.evaluateBlindingPolynomial(recipientCA.caID);
-
-                boolean shareValid = CA.verifyShare(s_ij, t_ij, senderCA.getRevealedCommitments(), recipientCA.caID, g1,
-                        h1, pairing.getZn());
-                if (!shareValid) {
-                    System.out.println("CA-" + senderCA.caID + " DISQUALIFIED: share sent to CA-" + recipientCA.caID
-                            + " failed verification.");
-                    disqualifiedSenderIds.add(senderCA.caID);
-                    continue;
-                }
-                received.put(senderCA.caID, s_ij);
-            }
-            secretSharesByRecipient.put(recipientCA.caID, received);
-        }
-
-        qualifiedCAs.removeIf(ca -> disqualifiedSenderIds.contains(ca.caID));
-        if (qualifiedCAs.size() < t) {
-            throw new IllegalStateException(
-                    "DKG failed: less than " + t + " qualified CAs remain after disqualifications.");
-        }
-
-        List<GroupElement> pkG1s = new ArrayList<>();
-        List<GroupElement> pkG2s = new ArrayList<>();
-        for (CA ca : qualifiedCAs) {
-            pkG1s.add(ca.getRevealedPubKeyG1());
-            pkG2s.add(ca.getRevealedPubKeyG2());
-        }
-
-        for (CA ca : qualifiedCAs) {
-            List<Zn.ZnElement> shares = new ArrayList<>();
-            for (Map.Entry<Integer, Zn.ZnElement> entry : secretSharesByRecipient.get(ca.caID).entrySet()) {
-                if (!disqualifiedSenderIds.contains(entry.getKey()))
-                    shares.add(entry.getValue());
-            }
-            ca.finalizeDKG(shares, pkG1s, pkG2s);
-        }
-
-        System.out.println("DKG Complete. Master keys established.");
-
-        // ---------------------------------------------------------
-        // Initializing Dodis-Yampolskiy and Schnorr engines
-        // ---------------------------------------------------------
 
         DodisYampolskiyVRF vrf = new DodisYampolskiyVRF(pairing);
         SchnorrZKP schnorr = new SchnorrZKP(pairing);
@@ -159,9 +57,32 @@ public class Main {
         Babel babel = Babel.getInstance();
         String localhost = InetAddress.getByName("127.0.0.1").getHostAddress();
 
+        // Endereços das CAs, iguais com demo/ca-config/ca-*.properties
+        Map<Host, Integer> caNetworkMap = new HashMap<>();
+        int caBasePort = 10000;
+        for (int i = 1; i <= n; i++) {
+            caNetworkMap.put(new Host(InetAddress.getByName(localhost), caBasePort + i), i);
+        }
+
+        // pergunta a mpk a uma CA que já esteja pronta, e repete até o DKG estar finalizado
+        System.out.println("Fetching master public key from CA-1...");
+        MasterPubKeyFetcher mpkFetcher = new MasterPubKeyFetcher(pairing);
+        Properties fetcherProperties = new Properties();
+        fetcherProperties.setProperty("address", localhost);
+        fetcherProperties.setProperty("port", "9500");
+        babel.registerProtocol(mpkFetcher);
+        mpkFetcher.init(fetcherProperties);
+        mpkFetcher.start();
+
+        Host firstCAHost = new Host(InetAddress.getByName(localhost), caBasePort + 1);
+        GroupElement[] mpk = mpkFetcher.fetchBlocking(firstCAHost, 1, 10, 3000);
+        GroupElement mpkG1 = mpk[0];
+        GroupElement mpkG2 = mpk[1];
+        System.out.println("Master public key received!"); 
+
         // Setup DA on port 10000
-        System.out.println("Starting DA node on port 9000");
-        DA cryptoDA = new DA(vrf, schnorr, dleqZKP, pairing, g1, g2, qualifiedCAs.get(0).getMasterPubKeyG2());
+        System.out.println("Starting DA node on port 10000");
+        DA cryptoDA = new DA(vrf, schnorr, dleqZKP, pairing, g1, g2, mpkG2);
         DAProtocol daProtocol = new DAProtocol(pairing, cryptoDA);
         Properties daProperties = new Properties();
         daProperties.setProperty("address", localhost);
@@ -170,33 +91,12 @@ public class Main {
 
         babel.registerProtocol(daProtocol);
         daProtocol.init(daProperties);
-
-        // Setup CA on ports 10001, 10002, 10003...
-        Map<Host, Integer> caNetworkMap = new HashMap<>();
-        int caBasePort = 10000;
-
-        for (int i = 0; i < n; i++) {
-            int caPort = caBasePort + CAs.get(i).caID;
-            System.out.println("Starting CA-" + CAs.get(i).caID + " node on port " + caPort + "...");
-
-            CAProtocol caProtocol = new CAProtocol(pairing, CAs.get(i), CAs.get(i).caID);
-            Properties caProps = new Properties();
-            caProps.setProperty("address", localhost);
-            caProps.setProperty("port", String.valueOf(caPort));
-
-            Host caHost = new Host(InetAddress.getByName(localhost), caPort);
-            caNetworkMap.put(caHost, CAs.get(i).caID);
-
-            babel.registerProtocol(caProtocol);
-            caProtocol.init(caProps);
-        }
+        daProtocol.start();
 
         // Setup User Node on port 8050
         System.out.println("Starting User node on port 8050...");
         User cryptoUser = new User(pairing);
-        GroupElement mpkG1 = qualifiedCAs.get(0).getMasterPubKeyG1(); // master keys from DKG phase
-        GroupElement mpkG2 = qualifiedCAs.get(0).getMasterPubKeyG2();
-
+        
         UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, dleqZKP, g1, h1, mpkG1, mpkG2, g1,
                 g2, "000a", new ArrayList<>());
         Properties userProperties = new Properties();
@@ -205,9 +105,8 @@ public class Main {
 
         babel.registerProtocol(userProtocol);
         userProtocol.init(userProperties);
+        userProtocol.start();
 
-        // Start Babel
-        babel.start();
         System.out.println("Babel successfully running");
 
         // extra time to make sure server sockets bind to the OS ports
