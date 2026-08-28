@@ -4,6 +4,7 @@ import java.io.FileWriter;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -94,21 +95,6 @@ public class Main {
         daProtocol.init(daProperties);
         daProtocol.start();
 
-        // Setup User Node on port 8050
-        System.out.println("Starting User node on port 8050...");
-        User cryptoUser = new User(pairing);
-
-        UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, dleqZKP, g1, h1, mpkG1,
-                mpkG2, g1,
-                g2, "000a", new ArrayList<>());
-        Properties userProperties = new Properties();
-        userProperties.setProperty("address", localhost);
-        userProperties.setProperty("port", "8050");
-
-        babel.registerProtocol(userProtocol);
-        userProtocol.init(userProperties);
-        userProtocol.start();
-
         System.out.println("Babel successfully running");
 
         // extra time to make sure server sockets bind to the OS ports
@@ -124,48 +110,87 @@ public class Main {
         torBridgeThread.start();
 
         // ---------------------------------------------------------
-        // 4. TRIGGER PROTOCOL EXECUTION
+        // 4. TRIGGER PROTOCOL EXECUTION (um relay simulado por nó Chutney)
         // ---------------------------------------------------------
-        System.out.println("Triggering User Protocol to begin network handshake...");
-        userProtocol.startRegistration(caNetworkMap, daHost);
+        String nodesEnv = System.getenv("DITTOR_NODES");
 
-        Thread.sleep(2500); // to make sure the protocol async tasks are complete
-        try {
-            JSONConverter jsonConverter = new JSONConverter();
+        List<String> nodeNames = new ArrayList<>();
+        if (nodesEnv == null || nodesEnv.trim().isEmpty())
+            nodeNames.add("000a");
+        else {
+            for (String name : nodesEnv.split(",")) {
+                nodeNames.add(name.trim());
+            }
+        }
+        String dataDir = System.getenv("DITTOR_DATA_DIR");
 
-            String context = "TorRelayConsensus2026";
+        for (int i = 0; i < nodeNames.size(); i++) {
+            String nodeName = nodeNames.get(i);
+            System.out.println(
+                    "\n--- Starting User node for Chutney node " + nodeName + " (port " + (8050 + i) + ") ---");
 
-            GroupElement userPubKey = userProtocol.getUserPubKey();
-            VRFResult vrfResult = userProtocol.getVrfResult();
+            User cryptoUser = new User(pairing);
+            UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, dleqZKP, g1, h1, mpkG1,
+                    mpkG2, g1, g2, nodeName, new ArrayList<>(), i);
+            Properties userProperties = new Properties();
+            userProperties.setProperty("address", localhost);
+            userProperties.setProperty("port", String.valueOf(8050 + i));
 
-            GroupElement g1x = userProtocol.getCredentialCommitmentG1();
+            babel.registerProtocol(userProtocol);
+            userProtocol.init(userProperties);
+            userProtocol.start();
 
-            GroupElement credential = userProtocol.getCredential();
-            Proof dleqProof = userProtocol.getDleqProof();
-            String realPkJSON = jsonConverter.serialize(userPubKey.getRepresentation());
-            String realNymJSON = jsonConverter.serialize(vrfResult.getPseudonym().getRepresentation());
-            String realVrfZkpJSON = jsonConverter.serialize(vrfResult.getZeroKnowledgeProof().getRepresentation());
-            String g1xJSON = jsonConverter.serialize(g1x.getRepresentation());
-            String credentialJSON = jsonConverter.serialize(credential.getRepresentation());
-            String dleqChallengeJSON = jsonConverter.serialize(dleqProof.getChallenge().getRepresentation());
-            String dleqResponseJSON = jsonConverter.serialize(dleqProof.getResponse().getRepresentation());
+            Thread.sleep(500);
 
-            String dittorProofString = "dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " "
-                    + realVrfZkpJSON + " " + g1xJSON + " " + credentialJSON + " " + dleqChallengeJSON + " "
-                    + dleqResponseJSON;
-            System.out.println("\n=======================================");
-            System.out.println("[DITTOR CONFIG] " + dittorProofString);
-            System.out.println("=======================================\n");
+            System.out.println("Triggering User Protocol to begin network handshake for node " + nodeName + "...");
+            userProtocol.startRegistration(caNetworkMap, daHost);
 
-            String chutneyPath = System.getenv().getOrDefault("DITTOR_PROOF_PATH",
-                    "../chutney/net/nodes/000a/dittor_proof.txt");
-            FileWriter writer = new FileWriter(chutneyPath);
-            writer.write(dittorProofString);
-            writer.close();
-            System.out.println("Successfully exported proof to Chutney node 000a!");
-        } catch (Exception e) {
-            System.out.println("[DITTOR CONFIG] Error compiling tokens: " + e.getMessage());
-            e.printStackTrace();
+            Thread.sleep(2500); // to make sure the protocol async tasks are complete
+            try {
+                JSONConverter jsonConverter = new JSONConverter();
+
+                String context = "TorRelayConsensus2026";
+
+                GroupElement userPubKey = userProtocol.getUserPubKey();
+                VRFResult vrfResult = userProtocol.getVrfResult();
+
+                GroupElement g1x = userProtocol.getCredentialCommitmentG1();
+
+                GroupElement credential = userProtocol.getCredential();
+                Proof dleqProof = userProtocol.getDleqProof();
+                String realPkJSON = jsonConverter.serialize(userPubKey.getRepresentation());
+                String realNymJSON = jsonConverter.serialize(vrfResult.getPseudonym().getRepresentation());
+                String realVrfZkpJSON = jsonConverter.serialize(vrfResult.getZeroKnowledgeProof().getRepresentation());
+                String g1xJSON = jsonConverter.serialize(g1x.getRepresentation());
+                String credentialJSON = jsonConverter.serialize(credential.getRepresentation());
+                String dleqChallengeJSON = jsonConverter.serialize(dleqProof.getChallenge().getRepresentation());
+                String dleqResponseJSON = jsonConverter.serialize(dleqProof.getResponse().getRepresentation());
+
+                String dittorProofString = "dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " "
+                        + realVrfZkpJSON + " " + g1xJSON + " " + credentialJSON + " " + dleqChallengeJSON + " "
+                        + dleqResponseJSON;
+                System.out.println("\n=======================================");
+                System.out.println("[DITTOR CONFIG] (" + nodeName + ") " + dittorProofString);
+                System.out.println("=======================================\n");
+
+                String nodePath;
+                if (nodesEnv == null || nodesEnv.trim().isEmpty()) {
+                    nodePath = System.getenv().getOrDefault("DITTOR_PROOF_PATH",
+                        "../chutney/net/nodes/000a/dittor_proof.txt");
+                } else if (dataDir != null && !dataDir.trim().isEmpty()) {
+                    nodePath = dataDir + "/nodes/" + nodeName + "/dittor_proof.txt";
+                } else {
+                    nodePath = ".../chutney/net/nodes/" + nodeName + "/dittor_proof.txt";
+                }
+
+                FileWriter writer = new FileWriter(nodePath);
+                writer.write(dittorProofString);
+                writer.close();
+                System.out.println("Successfully exported proof to Chutney node " + nodeName + "!");
+            } catch (Exception e) {
+                System.out.println("[DITTOR CONFIG] (" + nodeName + ") Error compiling tokens: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
 

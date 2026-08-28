@@ -30,7 +30,7 @@ import pt.unl.fct.di.novasys.network.data.Host;
 
 public class UserProtocol extends GenericProtocol {
     public static final String PROTOCOL_NAME = "UserProtocol";
-    public static final short PROTOCOL_ID = 100;
+    public static final short BASE_PROTOCOL_ID = 300;
 
     private final BilinearGroup pairing;
     private final User cryptoUser;
@@ -62,8 +62,9 @@ public class UserProtocol extends GenericProtocol {
 
     public UserProtocol(BilinearGroup pairing, User cryptoUser, int threshold, DodisYampolskiyVRF vrf,
             SchnorrZKP schnorr, DLEQZKP dleqZKP, GroupElement baseG, GroupElement baseH, GroupElement mpkG1,
-            GroupElement mpkG2, GroupElement g1, GroupElement g2, String nodeId, List<String> familyIds) {
-        super(PROTOCOL_NAME, PROTOCOL_ID);
+            GroupElement mpkG2, GroupElement g1, GroupElement g2, String nodeId, List<String> familyIds,
+            int userIndex) {
+        super(PROTOCOL_NAME + "-" + userIndex, (short) (BASE_PROTOCOL_ID + userIndex));
         this.pairing = pairing;
         this.cryptoUser = cryptoUser;
         this.threshold = threshold;
