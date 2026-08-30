@@ -180,13 +180,26 @@ public class Main {
                 } else if (dataDir != null && !dataDir.trim().isEmpty()) {
                     nodePath = dataDir + "/nodes/" + nodeName + "/dittor_proof.txt";
                 } else {
-                    nodePath = ".../chutney/net/nodes/" + nodeName + "/dittor_proof.txt";
+                    nodePath = "../chutney/net/nodes/" + nodeName + "/dittor_proof.txt";
                 }
 
                 FileWriter writer = new FileWriter(nodePath);
                 writer.write(dittorProofString);
                 writer.close();
                 System.out.println("Successfully exported proof to Chutney node " + nodeName + "!");
+
+                // Payload no formato esperado pela bridge
+                String familyIdsBridge = "-";
+                String bridgePayload = context + "|" + realPkJSON + "|" + realNymJSON + "|" + realVrfZkpJSON + "|"
+                        + g1xJSON + "|" + credentialJSON + "|" + dleqChallengeJSON + "|" + dleqResponseJSON + "|"
+                        + nodeName + "|" + familyIdsBridge;
+
+                String bridgePayloadPath = nodePath.replace("dittor_proof.txt", "bridge_payload.txt");
+                FileWriter bridgeWriter = new FileWriter(bridgePayloadPath);
+                bridgeWriter.write(bridgePayload);
+                bridgeWriter.close();
+                System.out.println("Successfully exported bridge payload for node " + nodeName + " to "
+                        + bridgePayloadPath);
             } catch (Exception e) {
                 System.out.println("[DITTOR CONFIG] (" + nodeName + ") Error compiling tokens: " + e.getMessage());
                 e.printStackTrace();

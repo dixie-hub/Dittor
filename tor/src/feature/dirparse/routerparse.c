@@ -1005,15 +1005,23 @@ router_parse_entry_from_string(const char *s, const char *end, int cache_copy,
       } else {
         log_warn(LD_DIR,
                  "[Tor-Dittor] Verification REJECTED by backend for '%s'. "
-                 "Response: %s",
+                 "Response: %s. Rejecting descriptor.",
                  router->nickname ? router->nickname : "unknown",
                  verification_response);
+        tor_free(verification_response);
+        goto err;
       }
       tor_free(verification_response);
     } else {
       log_warn(LD_DIR, "[Tor-Dittor] Loopback connection to port 8081 failed. "
                        "Keeping node alive.");
     }
+  } else {
+    log_warn(LD_DIR,
+             "[Tor-Dittor] Descriptor for '%s' has no dittor-proof token. "
+             "Rejecting.",
+             router->nickname ? router->nickname : "unknown");
+    goto err;
   }
   // DITTOR END
 
