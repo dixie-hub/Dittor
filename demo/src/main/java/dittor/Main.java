@@ -129,9 +129,11 @@ public class Main {
             System.out.println(
                     "\n--- Starting User node for Chutney node " + nodeName + " (port " + (8050 + i) + ") ---");
 
-            User cryptoUser = new User(pairing);
+                        User cryptoUser = new User(pairing);
+            List<String> testFamily = new ArrayList<>(); // TESTE 5.3 (temporário)
+                        testFamily.add("ed25519:tFNOVZ6ClGUkHg4Bimy9UesMqCw6+G5acJiBFxixWvc");
             UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, dleqZKP, g1, h1, mpkG1,
-                    mpkG2, g1, g2, nodeName, new ArrayList<>(), i);
+                    mpkG2, g1, g2, nodeName, testFamily, i);
             Properties userProperties = new Properties();
             userProperties.setProperty("address", localhost);
             userProperties.setProperty("port", String.valueOf(8050 + i));

@@ -72,7 +72,9 @@ public class DAServer implements Runnable {
                                 String dleqChallengeStr = sanitizeJsonString(parts[6]);
                                 String dleqResponseStr = sanitizeJsonString(parts[7]);
                                 String nodeId = parts[8].trim();
-                                String familyIdsRaw = parts[9].trim();
+                                //String familyIdsRaw = parts[9].trim();
+                                                                String familyIdsRaw = parts[9].trim();
+                                System.out.println("[DEBUG] familyIdsRaw recebido = '" + familyIdsRaw + "'");
 
                                 if (!pkStr.contains("mock_pk")) {
                                     GroupElement pk = pairing.getG2().restoreElement(jsonConverter.deserialize(pkStr));
@@ -95,7 +97,7 @@ public class DAServer implements Runnable {
                                     System.out.println("[DA-Server] Credential Linkage Outcome: " + (isCredentialValid ? "PASS" : "FAIL"));
 
                                     if (isVrfValid && isCredentialValid) {
-                                        Set<String> familyIds = familyIdsRaw.equals("-") ? new HashSet<>() : new HashSet<>(Arrays.asList(familyIdsRaw.split(".")));
+                                        Set<String> familyIds = familyIdsRaw.equals("-") ? new HashSet<>() : new HashSet<>(Arrays.asList(familyIdsRaw.split(",")));
                                         isValid = cryptoDA.registerNode(context, nym, nodeId, familyIds);
                                     } else
                                         isValid = false;

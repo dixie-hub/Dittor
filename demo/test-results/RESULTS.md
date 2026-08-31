@@ -444,6 +444,131 @@ deliberada e documentada) o achado acidental equivalente já registado no teste
 
 ---
 
+## Categoria 5 — Aceitação legítima multi-nó com família partilhada
+
+### Teste 5.1 — Nível Babel (registo simulado interno, sem Tor/bridge)
+
+**Metodologia:** mesma alteração temporária do teste 4.1 (um só `User`
+partilhado entre `DITTOR_NODES='000a,001a'`, logo o mesmo pseudónimo VRF), mas
+desta vez com `familyIds=["familyXYZ"]` não-vazio e igual para os dois nós, em
+vez da lista vazia por omissão do `Main.java`.
+
+**Resultado:** os dois nós registaram com sucesso:
+
+```
+[DA] New pseudonym registered for node 000a
+[DA] Verification SUCCESS. Adding to Tor Consensus list.
+...
+[DA] Node 001a accepted under existing pseudonym (shared family)!
+[DA] Verification SUCCESS. Adding to Tor Consensus list.
+```
+
+**Interpretação:** confirma o caso positivo simétrico ao teste 4.1 — a mesma
+lógica de colisão de pseudónimo ([DA.java:107-121](demo/src/main/java/dittor/crypto/DA.java:107))
+que rejeita reutilização sem família partilhada aceita corretamente a
+reutilização quando há sobreposição de `family_ids`, permitindo que um operador
+legítimo registe vários nós sem ser incorretamente marcado como Sybil.
+
+**Nota:** o output desta execução inclui também, no fim, uma rejeição
+`[DA] REJECTED: node FD68816E5E77D8A44D47B113401272204D8BDC6C reused a
+pseudonym...` — ruído de fundo do processo Tor real do `001a` (ainda em
+execução de testes anteriores, sem nenhuma família real configurada) a
+resubmeter pelo caminho C, sem relação com este teste Babel. Não afeta o
+resultado.
+
+### Teste 5.2 — Nível Bridge (payloads diretos à porta 8081, família partilhada)
+
+**Bug encontrado e corrigido antes deste teste, em
+[DAServer.java:98](demo/src/main/java/dittor/tor/DAServer.java:98):**
+`familyIdsRaw.split(".")` usa `.` como regex ("qualquer caracter"), não como
+caracter literal — `"familyXYZ".split(".")` devolve um array **vazio**, não
+`["familyXYZ"]` (gotcha clássico do Java). Ou seja, antes desta correção,
+qualquer `family_ids` não-vazio recebido pela bridge era sempre interpretado
+como conjunto vazio — o mecanismo de família nunca teria funcionado por este
+caminho. Corrigido para `familyIdsRaw.split(",")`.
+
+**Metodologia:** alteração temporária em `Main.java` (só a lista de
+`familyIds` do nó simulado passa a `["familyXYZ"]` em vez de vazia — variante
+mais simples da alteração do teste 4.1/5.1, um só nó, sem partilhar `User`).
+`Main.java` relançado com `DITTOR_NODES='000a'`, registando `000a` via Babel
+com família `["familyXYZ"]`. Duplicado o `bridge_payload.txt` resultante,
+desta vez alterando **dois** campos — `nodeId` (índice 9) e `familyIds`
+(índice 10) — com `awk -F'|' -v OFS='|' '{$9="999z"; $10="familyXYZ"; print}'`.
+Enviado à porta 8081 via `BridgeTestClient`.
+
+**Resultado:**
+```
+[1/1] 42.78ms -> VALID
+```
+Confirmado no console do `Main.java`/`DAServer`:
+```
+[DA] Node 999z accepted under existing pseudonym (shared family)!
+[DA-Server] Pseudonym verified successfully!
+```
+
+**Interpretação:** confirma a Categoria 5 ao nível Bridge, e valida a correção
+do bug de parsing acima — sem ela, este teste teria dado `INVALID` mesmo com
+`family_ids` genuinamente partilhado, o que teria sido um falso negativo grave
+(bloquear operadores legítimos de multi-relay por um bug de parsing, não por
+desenho). Reforça, tal como no 4.2, que a lógica de família está corretamente
+implementada na própria `DA`, independente do transporte usado para lá chegar.
+
+### Teste 5.3 — Nível Completo (Tor real, com certificado de família real)
+
+**Metodologia — configuração da família real do Tor** (mecanismo `K_FAMILY_CERT`,
+não o `MyFamily` clássico):
+
+1. `tor --keygen-family <ficheiro-base>` gera `<base>.secret_family_key` e
+   imprime diretamente a linha a colar no torrc: `FamilyId <valor-base64>`.
+2. Copiar `<base>.secret_family_key` para o `KeyDirectory` de cada relay que
+   partilha a família (por omissão, `<node_dir>/keys/`; não é preciso definir
+   `FamilyKeyDirectory` explicitamente).
+3. Acrescentar `FamilyId <valor>` ao torrc de cada relay.
+4. Reiniciar o Tor (`FamilyKeyDirectory` é `VAR_IMMUTABLE`, não recarrega via
+   HUP) — cada relay gera então um `family-cert` assinado com a chave
+   partilhada + a sua própria chave de identidade, verificado por
+   `check_family_certs`/`check_one_family_cert`
+   ([routerparse.c:1410](tor/src/feature/dirparse/routerparse.c:1410)) tanto
+   por si próprio como por quem lhe analisa o descriptor.
+
+Configurado para os dois nós reais `000a` e `001a` (mesma chave de família
+copiada para ambos), com o mesmo `dittor_proof.txt` (mesmo pseudónimo)
+copiado para os dois, tal como no teste 4.3.
+
+**Armadilha encontrada (erro de metodologia, não bug de produção):** o
+`family_ids` real extraído pelo Tor vem com o prefixo `ed25519:` (ex.
+`ed25519:tFNOVZ6ClGUkHg4Bimy9UesMqCw6+G5acJiBFxixWvc`), confirmado por um
+diagnóstico temporário em `DAServer.java` a imprimir o valor bruto recebido.
+A entrada Babel simulada (mesmo truque dos testes 4.1/5.1/5.2, usada aqui
+para evitar que o registo automático do `Main.java` "envenenasse" o
+pseudónimo com família vazia) tinha sido configurada só com o valor
+base64 sem o prefixo — nunca coincidia com o valor real, causando rejeição
+permanente até isto ser corrigido. Corrigido ao incluir o prefixo
+`"ed25519:"` na string da família simulada.
+
+**Resultado, depois da correção — console `DAServer`/`Main.java`:**
+```
+[DA] New pseudonym registered for node 0738F207067BC55F8931A0FF0A1AFB94369F2515
+[DA] Node FD68816E5E77D8A44D47B113401272204D8BDC6C accepted under existing pseudonym (shared family)!
+[DA] Node 0738F207067BC55F8931A0FF0A1AFB94369F2515 accepted under existing pseudonym (shared family)!
+```
+
+`notice.log` de ambos os nós reais (`000a` e `001a`), sem nenhuma rejeição:
+```
+[notice] [Tor-Dittor] Verification SUCCESS for 'test000a'!
+[notice] [Tor-Dittor] Verification SUCCESS for 'test001a'!
+```
+
+**Interpretação:** completa a Categoria 5 nos três níveis (5.1 Babel, 5.2
+Bridge, 5.3 Completo) — confirma, através do mecanismo real e completo de
+certificados de família do Tor (não simulado), que um operador legítimo pode
+registar múltiplos relays sob o mesmo pseudónimo/segredo sem ser rejeitado
+como Sybil, desde que prove a relação de família através do certificado
+assinado. Fecha o par com a Categoria 4 (mesmo mecanismo de deteção de
+colisão, mas aqui com a exceção correta a funcionar ponta-a-ponta).
+
+---
+
 ## Categoria 6 — Desempenho (dados parciais, acumulados à medida que os outros testes correm)
 
 ### 6.2 — Overhead do socket bridge (isolado)
@@ -474,9 +599,9 @@ explicitamente como parte da análise na tese.
 - [x] 4.1 — Babel, reutilização de pseudónimo
 - [x] 4.2 — Bridge, reutilização de pseudónimo
 - [x] 4.3 — Completo, reutilização de pseudónimo
-- [ ] 5.1 — Babel, família partilhada
-- [ ] 5.2 — Bridge, família partilhada
-- [ ] 5.3 — Completo, família partilhada
+- [x] 5.1 — Babel, família partilhada
+- [x] 5.2 — Bridge, família partilhada
+- [x] 5.3 — Completo, família partilhada
 - [ ] 6.1 — Latência de registo ponta-a-ponta
 - [ ] 6.2 — Overhead do socket (repetir caso VALID 30x)
 - [ ] 6.3 — Custo do DKG (setup único)
