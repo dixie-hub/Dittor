@@ -314,6 +314,136 @@ trade-off a discutir explicitamente na tese.
 
 ---
 
+## Categoria 4 — Reutilização de pseudónimo sem família partilhada
+
+### Teste 4.1 — Nível Babel (registo simulado interno, sem Tor/bridge)
+
+**Metodologia:** alteração temporária em `Main.java` (revertida logo a seguir a
+este teste) — em vez de um `User` (com `secretX` aleatório) novo por nó
+simulado, os dois nós da lista `DITTOR_NODES` partilharam o mesmo `User`
+(logo, o mesmo pseudónimo VRF), com `familyIds` vazio para ambos (já era o
+comportamento por omissão do `Main.java`). `DITTOR_NODES='000a,001a'`, CAs a
+correr, registo feito através do protocolo Babel real (`UserProtocol` →
+`DAProtocol` → `DA.registerNode`), sem tocar em Tor/Chutney/bridge.
+
+**Resultado:** o nó `000a` registou com sucesso (primeiro a reivindicar o
+pseudónimo). O nó `001a`, com o mesmo pseudónimo e sem família partilhada:
+
+```
+[DA-Crypto] VRF Evaluation Outcome: PASS
+[DA-Crypto] DLEQ Eval Result: PASS
+[DA-Crypto] Credential Bilinear Check Result: PASS
+[DA] REJECTED: node 001a reused a pseudonym without shared family ids
+[DA] Verification FAILURE. Pseudonym is being reused without a shared family!
+Registration denied: Unauthorized: pseudonym already claimed by another node.
+[User] Execution cycle failed, shutting down system
+```
+
+**Interpretação:** as três verificações criptográficas (VRF, DLEQ, credencial)
+passam individualmente para o `001a` — a credencial e a prova são
+matematicamente válidas, tal como seriam para um atacante Sybil real a usar o
+mesmo segredo subjacente sob duas identidades de nó diferentes. A rejeição vem
+exclusivamente da lógica de unicidade de pseudónimo + interseção de
+`family_ids` (item 3), isolando bem a propriedade de resistência a Sybil que
+este teste valida (não é confundível com uma simples falha de prova inválida,
+categoria 1).
+
+**Achado sobre o harness de teste (não é uma falha de segurança):** uma
+rejeição no caminho Babel faz o `UserProtocol` chamar `System.exit(1)`
+([UserProtocol.java:214](demo/src/main/java/dittor/protocols/UserProtocol.java:214)),
+terminando todo o processo `Main.java` (incl. a bridge `DAServer`) assim que um
+nó é recusado. É uma limitação do harness de demonstração/simulação, não do
+protocolo em si — a DA responde corretamente com `false`/negação; é só o lado
+cliente simulado que não foi pensado para continuar depois de uma rejeição.
+Relevante para o desenho dos testes 5.x (só o *último* nó de uma lista pode
+testar um cenário de rejeição, já que o processo termina a seguir).
+
+### Teste 4.2 — Nível Bridge (payloads diretos à porta 8081, `nodeId` diferente)
+
+**Metodologia:** `Main.java` relançado com um único nó (`DITTOR_NODES='000a'`),
+registando `000a` via Babel normalmente (estado limpo, um só pseudónimo na
+tabela da DA). Duplicado o `bridge_payload.txt` gerado, alterando só o campo
+`nodeId` (índice 9, `awk -F'|' -v OFS='|' '{$9="999z"; print}'`) — pseudónimo e
+todas as provas criptográficas mantidas exatamente iguais. Ambos os payloads
+enviados diretamente à porta 8081 via `BridgeTestClient`, sem Tor/Chutney.
+
+**Nota de desenho descoberta no código:** [DA.java:107-108](demo/src/main/java/dittor/crypto/DA.java:107)
+trata um `nodeId` já registado a reenviar o mesmo pseudónimo como idempotente
+(`if (existing.containsKey(nodeId)) return true;`, sem exigir família
+partilhada) — só rejeita quando o `nodeId` é diferente do(s) já associado(s)
+àquele pseudónimo. Por isso o payload original, embora reenviado pela bridge
+depois de já ter sido registado via Babel, continua a dar `VALID`.
+
+**Resultado:**
+
+```
+--- Original (nodeId=000a, já registado via Babel) ---
+[1/1] 47.10ms -> VALID
+--- Duplicado (nodeId=999z, mesmo pseudonimo) ---
+[1/1] 39.84ms -> INVALID
+```
+
+Confirmado no console do `Main.java`/`DAServer`:
+```
+[DA] REJECTED: node 999z reused a pseudonym without shared family ids
+[DA-Server] Pseudonym rejected
+```
+
+**Interpretação:** confirma a Categoria 4 ao nível Bridge — a lógica de
+unicidade de pseudónimo funciona corretamente mesmo quando o pedido chega
+diretamente à bridge (sem passar pelo caminho Babel/simulado), reforçando que
+a proteção está implementada na própria `DA` (item 3), não depende de nenhum
+comportamento específico do transporte Babel.
+
+### Teste 4.3 — Nível Completo (Tor real, via `routerparse.c`/`dittor_proxy.c`)
+
+**Metodologia:** `Main.java` relançado com um único nó (`DITTOR_NODES='000a'`),
+gerando um pseudónimo fresco e registando-o via Babel sob o `nodeId` simulado
+`"000a"` (string literal). O mesmo `dittor_proof.txt` foi depois copiado
+manualmente também para a pasta do nó real `001a`
+(`cp .../000a/dittor_proof.txt .../001a/dittor_proof.txt`), para que o processo
+Tor real do `001a` o injetasse e submetesse à bridge com a sua própria
+identidade real.
+
+**Nota de metodologia importante:** o processo Tor real do `000a` **não
+resubmeteu** o novo ficheiro dentro da janela deste teste — o seu último
+descriptor já tinha sido aceite (fail-open) numa sessão de testes anterior
+(`10:37:39`), e o Tor só regenera descriptors com pouca frequência depois de
+um aceite, ao contrário do ciclo agressivo de retry (~60s) que se vê enquanto
+um descriptor continua a ser rejeitado (o mesmo padrão já documentado no teste
+3.2). Por isso, o "outro lado" da colisão observada nesta execução é a entrada
+Babel simulada (`nodeId="000a"`, string literal), não o processo Tor real do
+`000a`. A propriedade de segurança demonstrada é a mesma — a `DA.registerNode`
+usa exatamente a mesma lógica independentemente de quem já detém o pseudónimo
+([DA.java:96-122](demo/src/main/java/dittor/crypto/DA.java:96)) — mas por
+rigor não se deve descrever este resultado como "dois nós Tor reais a
+colidir entre si"; é "um nó Tor real, através do caminho C completo,
+corretamente barrado por colidir com um pseudónimo já reivindicado".
+
+**Resultado:** confirmado no console do `Main.java`/`DAServer`, repetido em
+cada ciclo periódico de resubmissão do `001a`:
+
+```
+[DA] New pseudonym registered for node 000a
+...
+[DA] REJECTED: node FD68816E5E77D8A44D47B113401272204D8BDC6C reused a pseudonym without shared family ids
+[DA-Server] Pseudonym rejected
+```
+
+`FD68816E5E77D8A44D47B113401272204D8BDC6C` é o `identity_digest` real (40
+carateres hex) do nó `001a` — confirma que é mesmo o processo Tor real, através
+do caminho C completo (`routerparse.c` → `dittor_proxy.c` → `DAServer` →
+`DA.registerNode`), a ser barrado, e não uma string simulada.
+
+**Interpretação:** completa a Categoria 4 nos três níveis (4.1 Babel, 4.2
+Bridge, 4.3 Completo) — a resistência a reutilização de pseudónimo sem família
+partilhada funciona de forma consistente em toda a pilha, incluindo através do
+caminho Tor real com uma identidade de nó genuína. Complementa (de forma
+deliberada e documentada) o achado acidental equivalente já registado no teste
+1.2b.
+
+---
+
 ## Categoria 6 — Desempenho (dados parciais, acumulados à medida que os outros testes correm)
 
 ### 6.2 — Overhead do socket bridge (isolado)
@@ -341,9 +471,9 @@ explicitamente como parte da análise na tese.
 - [x] 3.1a — Bridge, backend offline (nunca arrancou)
 - [x] 3.1b — Bridge, backend crasha a meio da ligação
 - [x] 3.2 — Completo, backend offline
-- [ ] 4.1 — Babel, reutilização de pseudónimo
-- [ ] 4.2 — Bridge, reutilização de pseudónimo
-- [ ] 4.3 — Completo, reutilização de pseudónimo
+- [x] 4.1 — Babel, reutilização de pseudónimo
+- [x] 4.2 — Bridge, reutilização de pseudónimo
+- [x] 4.3 — Completo, reutilização de pseudónimo
 - [ ] 5.1 — Babel, família partilhada
 - [ ] 5.2 — Bridge, família partilhada
 - [ ] 5.3 — Completo, família partilhada
