@@ -146,6 +146,174 @@ tarde.
 
 ---
 
+## Categoria 2 — Ausência de prova
+
+### Teste 2.1 — Nível Completo (Chutney real)
+
+**Metodologia:** só nível Completo — não há variante Bridge/Babel (não há nada
+para enviar quando a prova está simplesmente ausente). O token `dittor-proof`
+está registado como opcional na gramática de descriptors do Tor
+(`T01("dittor-proof", K_OPT_DITTOR_PROOF, GE(8), NO_OBJ)`,
+[parsecommon/routerparse.c:132](tor/src/feature/dirparse/routerparse.c:132)), por
+isso a sua ausência não é um erro de parsing — só é apanhada explicitamente pelo
+bloco Dittor. Removido o `dittor_proof.txt` do nó `000a`
+(`rm /tmp/dittor_chutney/nodes/000a/dittor_proof.txt`) com o `Main.java`/`DAServer`
+a continuar a correr mas sem ser contactado — a rejeição acontece inteiramente do
+lado do Tor, antes de qualquer ligação à bridge:
+
+```c
+tok = find_opt_by_keyword(tokens, K_OPT_DITTOR_PROOF);
+...
+} else {
+  log_warn(LD_DIR, "[Tor-Dittor] Descriptor for '%s' has no dittor-proof token. "
+           "Rejecting.", ...);
+  goto err;
+}
+```
+
+**Resultado:** rejeição confirmada e repetida em dois ciclos periódicos
+consecutivos de geração de descriptor (~60s de intervalo, sem intervenção
+manual entre eles):
+
+```
+Aug 30 22:05:47.591 [warn] [Tor-Dittor] Descriptor for 'test000a' has no dittor-proof token. Rejecting.
+Aug 30 22:06:47.598 [warn] [Tor-Dittor] Descriptor for 'test000a' has no dittor-proof token. Rejecting.
+```
+
+**Interpretação:** confirma que o item 9 cobre corretamente os dois casos de
+rejeição incondicional que desenhámos (prova presente mas inválida — teste 1.2 —
+e prova totalmente ausente — este teste), e que o caso de ausência nunca chega a
+contactar o `DAServer`/bridge (comportamento mais eficiente e correto, já que não
+há nada para a bridge verificar). Nota: a mensagem do lado da geração do
+descriptor (`"No local dittor_proof.txt found. Building normal descriptor"`,
+[router.c:3234](tor/src/feature/relay/router.c:3234)) é `log_info`, abaixo do
+nível capturado por omissão em `notice.log` — não apareceu no log, como esperado;
+não afeta a validade do resultado.
+
+---
+
+## Categoria 3 — Backend Java offline/crash
+
+### Teste 3.1a — Nível Bridge (backend nunca chegou a arrancar)
+
+**Metodologia:** `Main.java` (que aloja o `DAServer` na porta 8081) interrompido
+antes do teste, porta 8081 confirmada livre. Payload válido (`bridge_payload.txt`
+do nó `000a`, gerado num registo real anterior) enviado 30 vezes via
+`BridgeTestClient` diretamente à porta 8081.
+
+**Resultado:** 30/30 execuções devolveram `CONNECTION_ERROR: Connection refused`
+— falha limpa e tratada (`catch IOException` em
+[BridgeTestClient.java:37](demo/src/main/java/dittor/testing/BridgeTestClient.java:37)),
+sem exceções não apanhadas.
+
+**Latência (ms), N=30:**
+
+| Estatística | Valor |
+|---|---|
+| Média | 1,12 ms |
+| Mediana | 0,45 ms |
+| Mínimo | 0,30 ms |
+| Máximo | 20,58 ms |
+| Média sem outlier (excl. a 1ª execução, 20,58ms) | 0,45 ms |
+
+**Interpretação:** a rejeição é quase instantânea (~0,45ms) — muito mais rápida
+que qualquer um dos casos VALID/INVALID (57,60ms / 17,88ms), porque é uma recusa
+de ligação TCP ao nível do SO (`ECONNREFUSED`), sem sequer chegar a haver um
+handshake de aplicação. O único outlier (#1, 20,58ms) segue o mesmo padrão de
+warm-up de JIT/JVM observado no teste 1.1. Dados em bruto:
+`raw/3.1a_bridge_backend_offline.csv`.
+
+### Teste 3.1b — Nível Bridge (backend cai a meio da ligação)
+
+**Metodologia (nota sobre a primeira tentativa falhada):** a primeira abordagem
+usou o `BridgeTestClient` em background com um `sleep 0.05` antes de matar o
+`Main.java`, mas o resultado foi sempre `CONNECTION_ERROR: Connection refused`
+— indistinguível do 3.1a. Causa: o arranque de uma JVM nova para o cliente
+(tipicamente >50ms) é da mesma ordem de grandeza que o próprio tempo de resposta
+do servidor (~17-57ms), por isso não há janela fiável para "matar depois de
+ligar, antes de responder" usando um cliente que precisa de arrancar uma JVM de
+cada vez. Corrigido usando o redirecionamento `/dev/tcp` do próprio bash (sem
+arranque de processo nenhum): a ligação é aberta e o pedido enviado em
+comandos de shell, e só depois o `Main.java` é morto.
+
+```bash
+PAYLOAD=$(cat /tmp/dittor_chutney/nodes/000a/bridge_payload.txt)
+exec 3<>/dev/tcp/127.0.0.1/8081
+echo "VALIDATE $PAYLOAD" >&3
+pkill -9 -f dittor.Main
+RESPONSE=$(timeout 2 head -n1 <&3)
+```
+
+**Resultado:** a ligação TCP foi aceite com sucesso (não houve erro no
+`exec 3<>/dev/tcp/...`, ao contrário do que aconteceria se o backend já
+estivesse em baixo), o pedido foi enviado, e a resposta lida foi **vazia**
+(EOF imediato) — o servidor morreu antes de escrever qualquer linha de
+resposta.
+
+**Interpretação:** confirmado no código C consumidor real da bridge
+([dittor_proxy.c:25-38](tor/src/feature/dirparse/dittor_proxy.c:25)) que os
+casos "nunca ligou" (3.1a) e "ligou mas morreu antes de responder" (3.1b) são
+**tratados de forma idêntica**: `connect()` a falhar devolve `NULL`; e se a
+ligação for aceite mas `read()` devolver `0` ou erro, a condição
+`valread > 0` também falha e devolve `NULL` na mesma. Ou seja, do ponto de
+vista do Tor (`routerparse.c`), o 3.1a e o 3.1b acionam exatamente o mesmo
+caminho fail-open, indistinguíveis um do outro — resultado relevante para a
+tese, mostra que a implementação não precisa de distinguir os dois modos de
+falha para se comportar corretamente em ambos.
+
+### Teste 3.2 — Nível Completo (Tor real com backend offline)
+
+**Metodologia:** `dittor_proof.txt` válido regenerado para o nó `000a` (via
+`Main.java`, CAs a correr), `Main.java` interrompido deliberadamente logo após
+confirmar a escrita do ficheiro, **antes** de qualquer submissão do Tor real
+chegar à bridge — para garantir que o token `dittor-proof` está presente
+(diferente do teste 2.1) mas a porta 8081 está inacessível (mesma condição do
+3.1a/3.1b, desta vez pelo caminho C real completo).
+
+**Nota de metodologia — filtro de log incorreto:** `grep -i "dittor"` apanha
+também as linhas de exportação periódica de "consensus transparency" (o caminho
+`/tmp/dittor_chutney/...` contém a substring "dittor"), que acontecem a cada
+~20s — muito mais frequentes que os eventos reais do Dittor (~60s) — afogando-os
+num `tail` curto. Corrigido filtrando por `"Tor-Dittor"` (a tag usada em todas as
+mensagens de log reais do bloco Dittor), que não apanha essas linhas de ruído.
+
+**Resultado:**
+
+```
+Aug 31 10:37:08.111 [notice] [Tor-Dittor] Successfully injected local dittor_proof.txt into descriptor!
+Aug 31 10:37:08.111 [notice] [Tor-Dittor] Passing real descriptor payload to loopback proxy...
+Aug 31 10:37:08.111 [warn]   [Tor-Dittor] Loopback connection to port 8081 failed. Keeping node alive.
+Aug 31 10:37:39.548 [notice] [Tor-Dittor] Successfully injected local dittor_proof.txt into descriptor!
+Aug 31 10:37:39.548 [notice] [Tor-Dittor] Passing real descriptor payload to loopback proxy...
+Aug 31 10:37:39.548 [warn]   [Tor-Dittor] Loopback connection to port 8081 failed. Keeping node alive.
+```
+
+Sem nenhuma linha `Rejecting descriptor` a seguir a qualquer um destes dois
+eventos — confirma o comportamento fail-open do item 9 (o `goto err` só existe
+nos ramos "token ausente" e "resposta explícita não-VALID"; a falha de ligação à
+bridge cai num terceiro ramo que só regista o aviso e deixa o resto do parsing
+continuar normalmente).
+
+**Confirmação indireta adicional (achado não planeado):** comparando com os
+ciclos de retry observados nos testes 1.2/2.1 (reinjeção agressiva a cada ~60s
+enquanto o descriptor continua a ser rejeitado), aqui o Tor **parou de tentar
+republicar** logo depois destes dois eventos (nenhum evento `Tor-Dittor`
+seguinte no log, apesar de o `notice.log` continuar ativo com outras mensagens
+periódicas). Isto sugere que a cadência agressiva de republicação nos testes
+anteriores era o comportamento de retry normal do Tor perante uma publicação de
+descriptor falhada — e a sua ausência aqui é evidência indireta de que o
+descriptor foi de facto tratado como aceite, não só "não explicitamente
+rejeitado".
+
+**Interpretação:** confirma a Categoria 3 por completo — nos três níveis
+testados (3.1a, 3.1b, 3.2), uma falha do backend Java nunca resulta em bloqueio
+do nó; é uma escolha de desenho deliberada (documentada no item 9) para que uma
+falha de infraestrutura do sidecar Java não derrube a rede Tor, ao custo de,
+durante essa janela, não haver imposição real da resistência a Sybil — um
+trade-off a discutir explicitamente na tese.
+
+---
+
 ## Categoria 6 — Desempenho (dados parciais, acumulados à medida que os outros testes correm)
 
 ### 6.2 — Overhead do socket bridge (isolado)
@@ -169,9 +337,10 @@ explicitamente como parte da análise na tese.
 
 - [x] 1.1 — Bridge, prova inválida
 - [x] 1.2 — Completo, prova inválida (1.2a payload malformado + 1.2b DLEQ inválido bem formado)
-- [ ] 2.1 — Completo, ausência de prova
-- [ ] 3.1a/3.1b — Bridge, backend offline/crash
-- [ ] 3.2 — Completo, backend offline
+- [x] 2.1 — Completo, ausência de prova
+- [x] 3.1a — Bridge, backend offline (nunca arrancou)
+- [x] 3.1b — Bridge, backend crasha a meio da ligação
+- [x] 3.2 — Completo, backend offline
 - [ ] 4.1 — Babel, reutilização de pseudónimo
 - [ ] 4.2 — Bridge, reutilização de pseudónimo
 - [ ] 4.3 — Completo, reutilização de pseudónimo
