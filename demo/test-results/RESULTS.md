@@ -573,18 +573,162 @@ colisão, mas aqui com a exceção correta a funcionar ponta-a-ponta).
 
 ### 6.2 — Overhead do socket bridge (isolado)
 
-| Cenário | N | Latência |
-|---|---|---|
-| Payload válido (`VALID`) | 1 | 57,60 ms |
-| Payload inválido (`INVALID`) | 30 | média 17,88 ms (16,71 ms sem outliers) — ver Categoria 1, Teste 1.1 |
+**Metodologia (caso `VALID`, N=30):** o mesmo `bridge_payload.txt` válido do
+nó `000a` (já registado) enviado 30x via `BridgeTestClient` — dá sempre
+`VALID` por idempotência ([DA.java:107-108](demo/src/main/java/dittor/crypto/DA.java:107)),
+mas a verificação criptográfica completa (VRF+DLEQ+par bilinear) corre por
+inteiro em cada envio, já que essa verificação acontece em
+[DAServer.java:92-93](demo/src/main/java/dittor/tor/DAServer.java:92), antes
+de `registerNode` sequer ser chamado — por isso mede o custo real e completo
+do caminho `VALID`, não um atalho.
 
-**Nota:** só há 1 amostra do caminho `VALID` até agora — vale a pena repetir esse
-caso também 30x (mesmo formato do teste 1.1) antes de reportar isto como número
-final, para ter uma média comparável. A diferença entre os dois casos (57,60ms vs
-~17ms) é esperada: o caminho `VALID` faz a verificação bilinear completa (par de
-emparelhamentos), enquanto o `INVALID` falha mais cedo, na verificação DLEQ, antes
-de chegar ao passo bilinear — por isso é mais rápido. Vale a pena confirmar isto
-explicitamente como parte da análise na tese.
+| Cenário | N | Média | Mediana | Mín | Máx | Média sem outliers |
+|---|---|---|---|---|---|---|
+| Payload válido (`VALID`) | 30 | 22,84 ms | 20,01 ms | 17,95 ms | 66,87 ms | 20,74 ms (excl. #1 e #29) |
+| Payload inválido (`INVALID`) | 30 | 17,88 ms | 16,78 ms | 15,35 ms | 34,18 ms | 16,71 ms — ver Categoria 1, Teste 1.1 |
+
+Dados em bruto: `raw/6.2_bridge_valid_proof.csv`.
+
+**Nota — correção de uma hipótese anterior:** a amostra única original do
+caminho `VALID` (57,60ms, teste inicial antes da Categoria 1) sugeria uma
+diferença grande entre `VALID` e `INVALID`, atribuída à verificação bilinear
+completa só acontecer no caminho `VALID`. Com N=30 em regime estacionário, a
+diferença real é muito menor (~21ms vs ~17ms, sem outliers) — a amostra
+original de 57,60ms era provavelmente um outlier de arranque (primeira
+ligação/JIT, mesmo padrão dos outliers #1 vistos em quase todos os testes
+repetidos desta secção), não representativo do custo em regime normal. A
+verificação bilinear tem, sim, um custo adicional mensurável (~4ms), mas
+muito mais modesto do que a amostra única isolada sugeria — vale a pena usar
+os números de N=30 na tese, não a amostra original.
+
+### 6.1 / 6.4 — Latência de registo ponta-a-ponta (custo recorrente por nó)
+
+**Metodologia:** instrumentação temporária em `UserProtocol.java` — timestamp
+no início de `startRegistration` (contacto às 3 CAs) e no recebimento da
+resposta final da DA (`handleRegisterRelayReply`). Mede o intervalo completo
+do registo de **um** nó (abertura de ligação às 3 CAs, `CredentialRequestMsg`,
+combinação threshold das assinaturas, prova DLEQ, registo na DA), com as CAs
+já com o DKG completo (não inclui o custo de setup do DKG — esse é o 6.3). O
+`Main.java` foi relançado 5 vezes seguidas (`DITTOR_NODES='000a'`), as 3 CAs
+mantidas a correr sem reiniciar entre execuções.
+
+**Resultado, N=5:** 201, 157, 160, 161, 158 ms.
+
+| Estatística | Valor |
+|---|---|
+| Média | 167,4 ms |
+| Mediana | 160 ms |
+| Mínimo | 157 ms |
+| Máximo | 201 ms |
+| Média sem outlier (excl. #1, 201ms) | 159 ms |
+
+**Interpretação:** ~160ms é o custo recorrente, em regime estacionário, para
+registar um novo nó (Sybil-check completo incluído) depois do DKG das CAs já
+estar feito. O outlier #1 (201ms) segue o mesmo padrão de warm-up de JIT/JVM
+observado em quase todos os testes desta secção. Este número cobre tanto o
+6.1 (latência ponta-a-ponta) como o 6.4 (custo por registo recorrente), já
+que ambos medem exatamente a mesma operação quando o DKG já está feito — a
+distinção só importa se se quiser separar explicitamente o custo do 6.3
+(setup único do DKG) do custo por-nó, o que se faz comparando este número
+com o do 6.3 a seguir.
+
+### 6.3 — Custo do DKG (setup único, 3 CAs)
+
+**Metodologia:** instrumentação temporária em `CAProtocol.java` — timestamp
+no início do DKG de cada CA (`startRegistration`-equivalente, logo antes de
+abrir ligações aos pares) e na conclusão (`DKG COMPLETE`). As 3 CAs (mortas e
+relançadas de raiz a cada ronda, para evitar o artefacto de *retry backoff*
+de TCP descrito abaixo) lançadas em sequência rápida nos Terminais 1/2/3, 4
+rondas completas.
+
+**Nota de metodologia — 1ª tentativa invalidada:** a primeira tentativa
+testou cada CA isoladamente (relançada várias vezes sozinha, com as outras
+duas já de pé há muito tempo ou também a reiniciar de forma descoordenada) e
+deu valores completamente inconsistentes (223ms-6191ms, quase 30x de
+variação) — dominados pelo *backoff* fixo de "retry em dois segundos" da
+ligação TCP entre pares, não pelo custo real do protocolo. Descartados.
+
+**Resultado (4 rondas, todas as 3 CAs relançadas de raiz em cada ronda):**
+
+| CA | Amostras (ms) | Média | Mediana | Mín | Máx |
+|---|---|---|---|---|---|
+| CA-1 (lançada 1ª) | 1413, 2140, 1408, 1326 | 1571,8 ms | 1410,5 ms | 1326 ms | 2140 ms |
+| CA-2 (lançada 2ª) | 887, 1017, 574, 726 | 801,0 ms | 806,5 ms | 574 ms | 1017 ms |
+| CA-3 (lançada 3ª) | 118, 442, 104, 104 | 192,0 ms | 111,0 ms | 104 ms | 442 ms |
+
+**Interpretação:** cada CA mede o seu próprio DKG a partir do instante em que
+o **seu próprio** processo arranca — como as 3 CAs são lançadas em sucessão
+rápida mas não perfeitamente simultânea (arranque de JVM + Maven + Bilinear
+group de cada uma), a CA-1 (lançada primeiro) "vê" o relógio a começar mais
+cedo, e por isso o seu tempo medido inclui a espera pelas outras duas
+arrancarem, além do protocolo DKG em si. A CA-3 (lançada por último) já
+encontra as outras duas prontas, por isso o seu número (~100-440ms) é o que
+mais se aproxima do custo *intrínseco* do protocolo DKG (troca de hashes de
+compromisso, revelação, distribuição de shares) uma vez que todas as ligações
+já estão estabelecidas. O número da CA-1 (~1,3-2,1s) é mais representativo do
+tempo de setup *operacional* completo, do ponto de vista de quem arranca a
+rede pela primeira vez (inclui arranque das 3 JVMs). Para a tese, vale a pena
+citar os dois: "~100-450ms de custo intrínseco do protocolo DKG" e "~1,3-2,1s
+de tempo de setup operacional ponta-a-ponta, incluindo arranque das 3 JVMs".
+
+### 6.5 — Comparação com Tor Metrics
+
+**Valores de referência** (fornecidos pelo utilizador, tabela já usada na
+tese, retirada do [Tor Metrics](https://metrics.torproject.org/torperf.html)):
+
+| Métrica | Resultados na Rede Tor |
+|---|---|
+| Tempo de download de ficheiros | 0,5-7 segundos |
+| Timeouts e falhas de download | Timeouts: 0%-50%; Falhas: 0% |
+| Tempo de construção de Tor Circuits | 1º salto: até 300ms; 2º salto: até 400ms; 3º salto: até 500ms |
+| Latência de round-trip de circuitos | Em média, 250ms-1s |
+| Throughput no download de ficheiros | Mediana entre 4-20 Mbps |
+
+**Nota de verificação:** tentei confirmar estes valores diretamente no site
+do Tor Metrics (`WebFetch` e o browser da sessão) sem sucesso — os gráficos
+são renderizados em JavaScript e os endpoints CSV tentados não responderam;
+a navegação direta ao site também foi bloqueada pela política de navegação
+desta sessão. Consegui confirmar que a estrutura e as categorias de métricas
+da tabela (`torperf.html` para download/timeouts, páginas `onionperf-*.html`
+para construção de circuitos/latência/throughput) correspondem à estrutura
+real do site — não os valores numéricos exatos. Recomenda-se confirmar
+visualmente no site antes de fechar a tese, caso os valores tenham mudado
+desde a captura original.
+
+**O argumento central da comparação:** a verificação Dittor acontece
+inteiramente no **caminho de publicação do descriptor** — entre o processo
+Tor de um relay e as autoridades de diretório (via `routerparse.c` →
+`dittor_proxy.c` → `DAServer`), tipicamente uma vez a cada ciclo de
+republicação do descriptor (na rede Tor real, da ordem das horas, não a cada
+circuito). As 5 métricas do Tor Metrics acima medem o **caminho de dados do
+utilizador** — construção de circuitos, pedidos HTTP, downloads — que nunca
+passa pelo código Dittor. Por desenho, a verificação Dittor não está no
+caminho crítico de nenhuma destas métricas: um utilizador a navegar através
+de relays já publicados não sofre nenhum overhead adicional, porque a
+verificação já aconteceu antes, na publicação do descriptor desse relay.
+
+**Os nossos números, para contexto (nenhum deles é comparável célula-a-célula
+com a tabela acima, mas servem para argumentar a ordem de grandeza):**
+
+| Operação Dittor | Custo medido | Frequência na rede real |
+|---|---|---|
+| Verificação de um descriptor na bridge (`VALID`) | ~21-23ms (mediana ~20ms, N=30 — Teste 6.2) | uma vez por ciclo de republicação de descriptor por relay (~horas) |
+| Registo completo de um novo relay (CAs+DA) | ~160ms em regime estacionário (Teste 6.1/6.4) | uma vez por relay, ao entrar na rede |
+| Setup do DKG das 3 CAs | ~100-450ms (custo intrínseco) / ~1,3-2,1s (operacional, N=4 — Teste 6.3) | uma vez, no arranque da infraestrutura Dittor |
+
+**Interpretação:** mesmo o maior destes números (~2,1s, setup do DKG) é um
+custo **único e de infraestrutura**, nunca repetido por circuito nem por
+download — comparável em ordem de grandeza a um único tempo de construção de
+circuito da rede real (até 500ms por salto, ~1,2s para um circuito de 3
+saltos), mas pago uma única vez, não por cada interação do utilizador. O
+custo recorrente mais relevante (~160ms por registo de relay, ~20ms por
+verificação de descriptor) acontece a uma cadência de horas, nunca no caminho
+de um pedido HTTP do utilizador. Por desenho, a diferença de performance
+para o utilizador final é zero, não apenas "insignificante" — o Dittor não
+adiciona nenhum passo ao caminho de dados que as métricas do Tor Metrics
+medem. Este é o argumento a usar na tese para justificar que o requisito de
+performance (diferença insignificante para a experiência do utilizador) está
+cumprido.
 
 ---
 
@@ -602,8 +746,8 @@ explicitamente como parte da análise na tese.
 - [x] 5.1 — Babel, família partilhada
 - [x] 5.2 — Bridge, família partilhada
 - [x] 5.3 — Completo, família partilhada
-- [ ] 6.1 — Latência de registo ponta-a-ponta
-- [ ] 6.2 — Overhead do socket (repetir caso VALID 30x)
-- [ ] 6.3 — Custo do DKG (setup único)
-- [ ] 6.4 — Custo por registo (recorrente)
-- [ ] 6.5 — Comparação com Tor Metrics (precisa dos valores de referência do utilizador)
+- [x] 6.1 — Latência de registo ponta-a-ponta
+- [x] 6.2 — Overhead do socket (repetir caso VALID 30x)
+- [x] 6.3 — Custo do DKG (setup único)
+- [x] 6.4 — Custo por registo (recorrente)
+- [x] 6.5 — Comparação com Tor Metrics
