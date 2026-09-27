@@ -9,10 +9,9 @@ import java.util.Properties;
 
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
-import org.cryptimeleon.mclwrap.bn254.MclBilinearGroup;
-import org.cryptimeleon.mclwrap.bn254.MclBilinearGroup.GroupChoice;
 
 import dittor.crypto.CA;
+import dittor.crypto.CryptimeleonSetup;
 import dittor.protocols.CAProtocol;
 import pt.unl.fct.di.novasys.babel.core.Babel;
 import pt.unl.fct.di.novasys.network.data.Host;
@@ -38,11 +37,12 @@ public class CAMain {
         String peersConfig = config.getProperty("peers", "");
 
         System.out.println("Initializing Bilinear Group...");
-        BilinearGroup pairing = new MclBilinearGroup(GroupChoice.BLS12_381);
+        CryptimeleonSetup setup = new CryptimeleonSetup();
+        BilinearGroup pairing = setup.getPairing();
 
-        GroupElement g1 = pairing.getG1().getGenerator();
-        GroupElement h1 = pairing.getHashIntoG1().hash("Dittor-Pedersen-h1-2026");
-        GroupElement g2 = pairing.getG2().getGenerator();
+        GroupElement g1 = setup.getG1();
+        GroupElement h1 = setup.getH1();
+        GroupElement g2 = setup.getG2();
 
         Map<Host, Integer> peerHosts = new HashMap<>();
         if (!peersConfig.trim().isEmpty()) {

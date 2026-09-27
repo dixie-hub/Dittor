@@ -1,7 +1,14 @@
 package dittor;
 
-import java.io.FileWriter;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,15 +18,13 @@ import java.util.Properties;
 import org.cryptimeleon.math.serialization.converter.JSONConverter;
 import org.cryptimeleon.math.structures.groups.GroupElement;
 import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
-import org.cryptimeleon.mclwrap.bn254.MclBilinearGroup;
-import org.cryptimeleon.mclwrap.bn254.MclBilinearGroup.GroupChoice;
 
+import dittor.crypto.CryptimeleonSetup;
 import dittor.crypto.DA;
 import dittor.crypto.User;
 import dittor.crypto.vrf.DLEQZKP;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
 import dittor.crypto.vrf.Proof;
-import dittor.crypto.vrf.SchnorrZKP;
 import dittor.crypto.vrf.VRFResult;
 import dittor.protocols.DAProtocol;
 import dittor.protocols.MasterPubKeyFetcher;
@@ -30,24 +35,47 @@ import pt.unl.fct.di.novasys.network.data.Host;
 
 public class Main {
 
+    // Escreve para um ficheiro temporário no mesmo diretório e troca-o atomicamente
+    // (rename) para o caminho final, para que o Tor nunca veja o ficheiro a meio
+    // de uma escrita quando o reinjeta periodicamente em router.c.
+    private static void writeFileAtomically(String targetPath, String content) throws IOException {
+        Path target = Paths.get(targetPath).toAbsolutePath();
+        Path parent = target.getParent();
+        Path tmp = Files.createTempFile(parent, target.getFileName().toString(), ".tmp");
+        try {
+            Files.write(tmp, content.getBytes(StandardCharsets.UTF_8));
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            Files.deleteIfExists(tmp);
+            throw e;
+        }
+    }
+
     public static void main(String[] args) throws Exception {
 
         // ---------------------------------------------------------
         // 1. CRYPTOGRAPHIC SETUP
         // ---------------------------------------------------------
 
-        int t = 2;
-        int n = 3;
+        // threshold/n lidos do config da CA-1, para nunca dessincronizarem dos
+        // valores que as CAs (CAMain.java) realmente estão a usar no DKG
+        String caConfigPath = System.getenv().getOrDefault("DITTOR_CA1_CONFIG", "ca-config/ca-1.properties");
+        Properties caConfig = new Properties();
+        try (InputStream in = new FileInputStream(caConfigPath)) {
+            caConfig.load(in);
+        }
+        int t = Integer.parseInt(caConfig.getProperty("threshold"));
+        int n = Integer.parseInt(caConfig.getProperty("n"));
 
         System.out.println("Initializing Bilinear Group...");
-        BilinearGroup pairing = new MclBilinearGroup(GroupChoice.BLS12_381); // BLS12-381 (mclwrap/MCL), 128 bits
+        CryptimeleonSetup setup = new CryptimeleonSetup();
+        BilinearGroup pairing = setup.getPairing();
 
-        GroupElement g1 = pairing.getG1().getGenerator();
-        GroupElement h1 = pairing.getHashIntoG1().hash("Dittor-Pedersen-h1-2026"); // fixo
-        GroupElement g2 = pairing.getG2().getGenerator();
+        GroupElement g1 = setup.getG1();
+        GroupElement h1 = setup.getH1();
+        GroupElement g2 = setup.getG2();
 
         DodisYampolskiyVRF vrf = new DodisYampolskiyVRF(pairing);
-        SchnorrZKP schnorr = new SchnorrZKP(pairing);
         DLEQZKP dleqZKP = new DLEQZKP(pairing);
 
         // ---------------------------------------------------------
@@ -84,7 +112,7 @@ public class Main {
 
         // Setup DA on port 10000
         System.out.println("Starting DA node on port 10000");
-        DA cryptoDA = new DA(vrf, schnorr, dleqZKP, pairing, g1, g2, mpkG2);
+        DA cryptoDA = new DA(vrf, dleqZKP, pairing, g1, g2, mpkG2);
         DAProtocol daProtocol = new DAProtocol(pairing, cryptoDA);
         Properties daProperties = new Properties();
         daProperties.setProperty("address", localhost);
@@ -130,7 +158,7 @@ public class Main {
                     "\n--- Starting User node for Chutney node " + nodeName + " (port " + (8050 + i) + ") ---");
 
             User cryptoUser = new User(pairing);
-            UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, schnorr, dleqZKP, g1, h1, mpkG1,
+            UserProtocol userProtocol = new UserProtocol(pairing, cryptoUser, t, vrf, dleqZKP, g1, h1, mpkG1,
                     mpkG2, g1, g2, nodeName, new ArrayList<>(), i);
             Properties userProperties = new Properties();
             userProperties.setProperty("address", localhost);
@@ -183,9 +211,7 @@ public class Main {
                     nodePath = "../chutney/net/nodes/" + nodeName + "/dittor_proof.txt";
                 }
 
-                FileWriter writer = new FileWriter(nodePath);
-                writer.write(dittorProofString);
-                writer.close();
+                writeFileAtomically(nodePath, dittorProofString);
                 System.out.println("Successfully exported proof to Chutney node " + nodeName + "!");
 
                 // Payload no formato esperado pela bridge
@@ -195,9 +221,7 @@ public class Main {
                         + nodeName + "|" + familyIdsBridge;
 
                 String bridgePayloadPath = nodePath.replace("dittor_proof.txt", "bridge_payload.txt");
-                FileWriter bridgeWriter = new FileWriter(bridgePayloadPath);
-                bridgeWriter.write(bridgePayload);
-                bridgeWriter.close();
+                writeFileAtomically(bridgePayloadPath, bridgePayload);
                 System.out.println("Successfully exported bridge payload for node " + nodeName + " to "
                         + bridgePayloadPath);
             } catch (Exception e) {

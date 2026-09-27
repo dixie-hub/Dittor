@@ -44,7 +44,7 @@ public class DAServer implements Runnable {
 
     @Override
     public void run() {
-        try (ServerSocket serverSocket = new ServerSocket(port, 0, java.net.InetAddress.getByName("0.0.0.0"))) {
+        try (ServerSocket serverSocket = new ServerSocket(port, 0, java.net.InetAddress.getByName("127.0.0.1"))) {
             System.out.println("[DA-Server] Listening for Tor connection on port " + port);
 
             while (true) {
@@ -52,6 +52,10 @@ public class DAServer implements Runnable {
                         BufferedReader in = new BufferedReader(
                                 new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
                         PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)) {
+
+                    // um cliente que liga mas nunca escreve nada não pode bloquear o serviço
+                    // para todos os outros pedidos
+                    clientSocket.setSoTimeout(5000);
 
                     String request = in.readLine();
                     if (request != null && request.startsWith("VALIDATE")) {

@@ -12,7 +12,6 @@ import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 import dittor.crypto.vrf.DLEQZKP;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
 import dittor.crypto.vrf.Proof;
-import dittor.crypto.vrf.SchnorrZKP;
 import dittor.crypto.vrf.VRFResult;
 
 /* Classe para as Directory Authorities do Tor
@@ -21,7 +20,6 @@ import dittor.crypto.vrf.VRFResult;
 public class DA {
 
     private final DodisYampolskiyVRF dodisYampolskiy;
-    private final SchnorrZKP schnorr;
     private final DLEQZKP dleqZKP;
     private final BilinearGroup pairing;
     private final GroupElement g2;
@@ -30,9 +28,8 @@ public class DA {
     // (context, pseudónimo) -> (nodeId -> family_ids desse nó)
     private final Map<String, Map<String, Set<String>>> registrations = new HashMap<>();
 
-    public DA(DodisYampolskiyVRF dodisYampolskiy, SchnorrZKP schnorr, DLEQZKP dleqZKP, BilinearGroup pairing, GroupElement g1, GroupElement g2, GroupElement mpkG2) {
+    public DA(DodisYampolskiyVRF dodisYampolskiy, DLEQZKP dleqZKP, BilinearGroup pairing, GroupElement g1, GroupElement g2, GroupElement mpkG2) {
         this.dodisYampolskiy = dodisYampolskiy;
-        this.schnorr = schnorr;
         this.dleqZKP = dleqZKP;
         this.pairing = pairing;
         this.g2 = g2;
@@ -48,20 +45,6 @@ public class DA {
             return isValid;
         } catch (Exception e) {
             System.err.println("[DA-Crypto] VRF validation failed: " + e.getMessage());
-            return false;
-        }
-    }
-
-    public boolean verifyIdentityProof(GroupElement userPubKeyG2, Proof identityProof, String context) {
-        System.out.println("[DA-Crypto] Verifying Schnorr Non-Interactive Zero-Knowledge Proof...");
-
-        try {
-            boolean isValid = schnorr.verifyProof(userPubKeyG2, context, identityProof);
-            System.out.println("[DA-Crypto] Schnorr ZKP Evaluation Outcome: " + (isValid ? "PASS" : "FAIL"));
-            return isValid;
-        } catch (Exception e) {
-            System.err.println("[DA-Crypto] Schnorr ZKP validation failed: " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }

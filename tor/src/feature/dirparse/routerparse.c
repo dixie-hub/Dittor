@@ -83,7 +83,6 @@
 
 /* Prototype function statement for the Dittor socket loopback bridge */
 char *dittorProxy(int port, const char *payload);
-static char last_seen_valid_dittor_proof[16384] = "";
 
 /** List of tokens recognized in router descriptors */
 // clang-format off
@@ -946,52 +945,31 @@ router_parse_entry_from_string(const char *s, const char *end, int cache_copy,
   // DITTOR START
   tok = find_opt_by_keyword(tokens, K_OPT_DITTOR_PROOF);
 
-  char validation_payload[16384];
-  int is_mock = 0;
+  if (tok != NULL && tok->n_args >= 8 && tok->args[0] != NULL &&
+      strcmp(tok->args[0], "TorRelayConsensus2026") == 0) {
+    char node_id_hex[HEX_DIGEST_LEN + 1];
+    base16_encode(node_id_hex, sizeof(node_id_hex),
+                  router->cache_info.identity_digest, DIGEST_LEN);
 
-  if (tok != NULL) {
-    if (tok->n_args >= 8 && tok->args[0] != NULL &&
-        strcmp(tok->args[0], "TorRelayConsensus2026") == 0) {
-      char node_id_hex[HEX_DIGEST_LEN + 1];
-      base16_encode(node_id_hex, sizeof(node_id_hex),
-                    router->cache_info.identity_digest, DIGEST_LEN);
-
-      char *family_ids_str;
-      if (router->family_ids && smartlist_len(router->family_ids) > 0) {
-        family_ids_str =
-            smartlist_join_strings(router->family_ids, ",", 0, NULL);
-      } else {
-        family_ids_str = tor_strdup("-");
-      }
-
-      snprintf(validation_payload, sizeof(validation_payload),
-               "VALIDATE %s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n", tok->args[0],
-               tok->args[1], tok->args[2], tok->args[3], tok->args[4],
-               tok->args[5], tok->args[6], tok->args[7], node_id_hex,
-               family_ids_str);
-      tor_free(family_ids_str);
-
-      snprintf(last_seen_valid_dittor_proof,
-               sizeof(last_seen_valid_dittor_proof), "%s", validation_payload);
-      is_mock = 0;
+    char *family_ids_str;
+    if (router->family_ids && smartlist_len(router->family_ids) > 0) {
+      family_ids_str =
+          smartlist_join_strings(router->family_ids, ",", 0, NULL);
     } else {
-      // Fallback logic for mock descriptors
-      if (strlen(last_seen_valid_dittor_proof) > 0) {
-        snprintf(validation_payload, sizeof(validation_payload), "%s",
-                 last_seen_valid_dittor_proof);
-      } else {
-        snprintf(validation_payload, sizeof(validation_payload),
-                 "VALIDATE "
-                 "TorRelayConsensus2026|EMPTY|EMPTY|EMPTY|EMPTY|EMPTY|EMPTY|"
-                 "EMPTY|EMPTY|EMPTY\n");
-      }
-      is_mock = 1;
+      family_ids_str = tor_strdup("-");
     }
 
-    log_notice(
-        LD_DIR,
-        "[Tor-Dittor] Passing %s descriptor payload to loopback proxy...",
-        is_mock ? "mock" : "real");
+    char validation_payload[16384];
+    snprintf(validation_payload, sizeof(validation_payload),
+             "VALIDATE %s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n", tok->args[0],
+             tok->args[1], tok->args[2], tok->args[3], tok->args[4],
+             tok->args[5], tok->args[6], tok->args[7], node_id_hex,
+             family_ids_str);
+    tor_free(family_ids_str);
+
+    log_notice(LD_DIR,
+               "[Tor-Dittor] Passing real descriptor payload to loopback "
+               "proxy...");
 
     char *verification_response = dittorProxy(8081, validation_payload);
 
@@ -1018,8 +996,8 @@ router_parse_entry_from_string(const char *s, const char *end, int cache_copy,
     }
   } else {
     log_warn(LD_DIR,
-             "[Tor-Dittor] Descriptor for '%s' has no dittor-proof token. "
-             "Rejecting.",
+             "[Tor-Dittor] Descriptor for '%s' has no valid dittor-proof "
+             "token. Rejecting.",
              router->nickname ? router->nickname : "unknown");
     goto err;
   }

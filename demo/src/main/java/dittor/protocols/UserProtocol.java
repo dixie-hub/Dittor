@@ -13,7 +13,6 @@ import org.cryptimeleon.math.structures.groups.elliptic.BilinearGroup;
 import dittor.crypto.User;
 import dittor.crypto.vrf.DLEQZKP;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
-import dittor.crypto.vrf.SchnorrZKP;
 import dittor.crypto.vrf.Proof;
 import dittor.crypto.vrf.VRFResult;
 import dittor.messages.ca.CredentialReplyMsg;
@@ -61,7 +60,7 @@ public class UserProtocol extends GenericProtocol {
     private Proof lastDleqProof;
 
     public UserProtocol(BilinearGroup pairing, User cryptoUser, int threshold, DodisYampolskiyVRF vrf,
-            SchnorrZKP schnorr, DLEQZKP dleqZKP, GroupElement baseG, GroupElement baseH, GroupElement mpkG1,
+            DLEQZKP dleqZKP, GroupElement baseG, GroupElement baseH, GroupElement mpkG1,
             GroupElement mpkG2, GroupElement g1, GroupElement g2, String nodeId, List<String> familyIds,
             int userIndex) {
         super(PROTOCOL_NAME + "-" + userIndex, (short) (BASE_PROTOCOL_ID + userIndex));

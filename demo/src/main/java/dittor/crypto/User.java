@@ -10,7 +10,6 @@ import org.cryptimeleon.math.structures.rings.zn.Zn;
 import dittor.crypto.vrf.DLEQZKP;
 import dittor.crypto.vrf.DodisYampolskiyVRF;
 import dittor.crypto.vrf.Proof;
-import dittor.crypto.vrf.SchnorrZKP;
 import dittor.crypto.vrf.VRFResult;
 
 public class User {
@@ -40,10 +39,6 @@ public class User {
     public GroupElement createBlindedCommit(GroupElement g, GroupElement h) {
         return g.pow(secretX).op(h.pow(blindingFactor)).compute(); // Pedersen Commitment = (g^secretX) *
                                                                    // (h^blindingFactor)
-    }
-
-    public Proof generateSchnorrPoK(SchnorrZKP schnorrZKP, String context) {
-        return schnorrZKP.generateProof(this.secretX, this.publicKeyG2, context);
     }
 
     public GroupElement getCredentialCommitmentG1(GroupElement g1) {
