@@ -38,6 +38,23 @@ public class Main {
     // Escreve para um ficheiro temporário no mesmo diretório e troca-o atomicamente
     // (rename) para o caminho final, para que o Tor nunca veja o ficheiro a meio
     // de uma escrita quando o reinjeta periodicamente em router.c.
+    // Constrói as duas representações da prova a partir da MESMA lista de campos, na
+    // mesma ordem, para nunca voltar a dessincronizar os índices entre o dittor_proof.txt
+    // (consumido pelo Tor, delimitado por espaços) e o bridge_payload.txt (para testes
+    // diretos à bridge, delimitado por pipes, com nodeId/familyIds adicionais).
+    private static String buildDittorProofLine(String context, String pkJSON, String nymJSON, String zkpJSON,
+            String g1xJSON, String credentialJSON, String dleqChallengeJSON, String dleqResponseJSON) {
+        return String.join(" ", "dittor-proof", context, pkJSON, nymJSON, zkpJSON, g1xJSON, credentialJSON,
+                dleqChallengeJSON, dleqResponseJSON);
+    }
+
+    private static String buildBridgePayloadLine(String context, String pkJSON, String nymJSON, String zkpJSON,
+            String g1xJSON, String credentialJSON, String dleqChallengeJSON, String dleqResponseJSON,
+            String nodeId, String familyIds) {
+        return String.join("|", context, pkJSON, nymJSON, zkpJSON, g1xJSON, credentialJSON, dleqChallengeJSON,
+                dleqResponseJSON, nodeId, familyIds);
+    }
+
     private static void writeFileAtomically(String targetPath, String content) throws IOException {
         Path target = Paths.get(targetPath).toAbsolutePath();
         Path parent = target.getParent();
@@ -194,9 +211,8 @@ public class Main {
                 String dleqChallengeJSON = jsonConverter.serialize(dleqProof.getChallenge().getRepresentation());
                 String dleqResponseJSON = jsonConverter.serialize(dleqProof.getResponse().getRepresentation());
 
-                String dittorProofString = "dittor-proof " + context + " " + realPkJSON + " " + realNymJSON + " "
-                        + realVrfZkpJSON + " " + g1xJSON + " " + credentialJSON + " " + dleqChallengeJSON + " "
-                        + dleqResponseJSON;
+                String dittorProofString = buildDittorProofLine(context, realPkJSON, realNymJSON, realVrfZkpJSON,
+                        g1xJSON, credentialJSON, dleqChallengeJSON, dleqResponseJSON);
                 System.out.println("\n=======================================");
                 System.out.println("[DITTOR CONFIG] (" + nodeName + ") " + dittorProofString);
                 System.out.println("=======================================\n");
@@ -216,9 +232,8 @@ public class Main {
 
                 // Payload no formato esperado pela bridge
                 String familyIdsBridge = "-";
-                String bridgePayload = context + "|" + realPkJSON + "|" + realNymJSON + "|" + realVrfZkpJSON + "|"
-                        + g1xJSON + "|" + credentialJSON + "|" + dleqChallengeJSON + "|" + dleqResponseJSON + "|"
-                        + nodeName + "|" + familyIdsBridge;
+                String bridgePayload = buildBridgePayloadLine(context, realPkJSON, realNymJSON, realVrfZkpJSON,
+                        g1xJSON, credentialJSON, dleqChallengeJSON, dleqResponseJSON, nodeName, familyIdsBridge);
 
                 String bridgePayloadPath = nodePath.replace("dittor_proof.txt", "bridge_payload.txt");
                 writeFileAtomically(bridgePayloadPath, bridgePayload);

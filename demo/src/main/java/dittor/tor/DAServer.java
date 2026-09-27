@@ -78,7 +78,7 @@ public class DAServer implements Runnable {
                                 String nodeId = parts[8].trim();
                                 String familyIdsRaw = parts[9].trim();
 
-                                if (!pkStr.contains("mock_pk")) {
+                                {
                                     GroupElement pk = pairing.getG2().restoreElement(jsonConverter.deserialize(pkStr));
                                     GroupElement nym = pairing.getGT().restoreElement(jsonConverter.deserialize(nymStr));
                                     GroupElement zkp = pairing.getG1().restoreElement(jsonConverter.deserialize(zkpStr));
