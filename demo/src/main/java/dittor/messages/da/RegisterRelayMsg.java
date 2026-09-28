@@ -147,7 +147,7 @@ public class RegisterRelayMsg extends ProtoMessage {
 
                     return new RegisterRelayMsg(pk, vrfData, g1x, credential, dleqProof, context, nodeId, familyIds);
                 } catch (Exception e) {
-                    System.out.println("Error: ");
+                    System.out.println("Error deserializing RegisterRelayMsg: " + e.getMessage());
                     e.printStackTrace();
                     throw new RuntimeException("Failed to decode message components.");
                 }

@@ -55,6 +55,33 @@ public class Main {
                 dleqResponseJSON, nodeId, familyIds);
     }
 
+    // Mostra um resumo legível da prova Dittor gerada, com o valor de cada campo
+    // truncado e identificado por label — o conteúdo completo continua a ir para o
+    // ficheiro (writeFileAtomically), isto é só para quem está a acompanhar a demo
+    // no terminal conseguir situar-se sem se perder num bloco gigante de números.
+    private static String truncateForDisplay(String value, int maxLen) {
+        if (value.length() <= maxLen) {
+            return value;
+        }
+        return value.substring(0, maxLen) + "...";
+    }
+
+    private static void printProofSummary(String nodeName, String context, String pkJSON, String nymJSON,
+            String zkpJSON, String g1xJSON, String credentialJSON, String dleqChallengeJSON,
+            String dleqResponseJSON) {
+        int maxLen = 40;
+        System.out.println("\n=== Dittor proof generated for node " + nodeName + " ===");
+        System.out.println("  Context:             " + context);
+        System.out.println("  Public Key (pk):     " + truncateForDisplay(pkJSON, maxLen));
+        System.out.println("  Pseudonym (nym):     " + truncateForDisplay(nymJSON, maxLen));
+        System.out.println("  VRF Proof (pi):      " + truncateForDisplay(zkpJSON, maxLen));
+        System.out.println("  Commitment (g1^x):   " + truncateForDisplay(g1xJSON, maxLen));
+        System.out.println("  Credential (sigma):  " + truncateForDisplay(credentialJSON, maxLen));
+        System.out.println("  DLEQ Challenge:      " + truncateForDisplay(dleqChallengeJSON, maxLen));
+        System.out.println("  DLEQ Response:       " + truncateForDisplay(dleqResponseJSON, maxLen));
+        System.out.println("===================================================\n");
+    }
+
     private static void writeFileAtomically(String targetPath, String content) throws IOException {
         Path target = Paths.get(targetPath).toAbsolutePath();
         Path parent = target.getParent();
@@ -213,9 +240,8 @@ public class Main {
 
                 String dittorProofString = buildDittorProofLine(context, realPkJSON, realNymJSON, realVrfZkpJSON,
                         g1xJSON, credentialJSON, dleqChallengeJSON, dleqResponseJSON);
-                System.out.println("\n=======================================");
-                System.out.println("[DITTOR CONFIG] (" + nodeName + ") " + dittorProofString);
-                System.out.println("=======================================\n");
+                printProofSummary(nodeName, context, realPkJSON, realNymJSON, realVrfZkpJSON, g1xJSON,
+                        credentialJSON, dleqChallengeJSON, dleqResponseJSON);
 
                 String nodePath;
                 if (nodesEnv == null || nodesEnv.trim().isEmpty()) {

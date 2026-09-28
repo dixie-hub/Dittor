@@ -102,7 +102,7 @@ public class UserProtocol extends GenericProtocol {
     }
 
     public void startRegistration(Map<Host, Integer> targetCAs, Host targetDA) {
-        System.out.println("[User] Generating fresh blinded commitment primtive...");
+        System.out.println("[User] Generating fresh blinded commitment primitive...");
         this.blindedCommitment = cryptoUser.createBlindedCommit(this.baseG, this.baseH);
         this.daHost = targetDA;
         this.caHostToIDMap.putAll(targetCAs);
